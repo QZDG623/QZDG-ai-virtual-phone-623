@@ -1,134 +1,51 @@
 /* ── Phone shell ── */
 
 .phone-shell-wrap {
-  --phone-total-width: calc(var(--phone-screen-width) + (2 * (var(--phone-frame-size) + var(--phone-case-padding) + var(--phone-case-border-size))));
-  display: grid;
-  gap: 10px;
-  width: calc(var(--phone-total-width) + 8px);
-  margin-inline: auto;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
   font-family: var(--app-font-family);
+  background: var(--c-page-body-bg, #000);
 }
 
-/* Outer metal mid-frame (stainless steel band) */
 .phone-case {
-  position: relative;
-  width: var(--phone-total-width);
-  margin-inline: auto;
-  border-radius: var(--phone-case-radius);
-  padding: var(--phone-case-padding);
-  border: 0.5px solid rgba(0, 0, 0, 0.35);
-  background:
-    linear-gradient(175deg,
-      #a8adb2 0%,
-      #8a9096 6%,
-      #6a7078 16%,
-      #565c64 30%,
-      #7a8088 42%,
-      #9aa0a6 48%,
-      #6e747c 56%,
-      #585e66 68%,
-      #788088 80%,
-      #969ca4 90%,
-      #a0a6ac 100%);
-  box-shadow:
-    0 30px 60px rgba(60, 60, 60, 0.4),
-    0 10px 24px rgba(80, 80, 80, 0.25),
-    inset 0 1.5px 0 rgba(255, 255, 255, 0.65),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
-    inset 1.5px 0 0 rgba(255, 255, 255, 0.4),
-    inset -1px 0 0 rgba(0, 0, 0, 0.18);
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-/* Inner black bezel */
 .phone-frame {
-  position: relative;
-  border-radius: var(--phone-frame-radius);
-  padding: var(--phone-frame-size);
-  background: #0c0c0c;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-/* Left side buttons — silent switch */
-.phone-case::before {
-  content: "";
-  position: absolute;
-  left: -2.5px;
-  top: 155px;
-  width: 3px;
-  height: 22px;
-  border-radius: 2px 0 0 2px;
-  background: linear-gradient(90deg, #6e747a, #8e949a, #6e747a);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-    -1px 0 3px rgba(0, 0, 0, 0.15);
-}
-
-/* Left side — volume buttons */
-.phone-frame::before {
-  content: "";
-  position: absolute;
-  left: -5.5px;
-  top: 200px;
-  width: 3px;
-  height: 32px;
-  border-radius: 2px 0 0 2px;
-  background: linear-gradient(90deg, #6e747a, #8e949a, #6e747a);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-    -1px 0 3px rgba(0, 0, 0, 0.15),
-    0 42px 0 0 #b8bcc0;
-}
-
-/* Left side — volume down */
+.phone-case::before,
+.phone-case::after,
+.phone-frame::before,
 .phone-frame::after {
-  content: "";
-  position: absolute;
-  left: -5.5px;
-  top: 244px;
-  width: 3px;
-  height: 32px;
-  border-radius: 2px 0 0 2px;
-  background: linear-gradient(90deg, #6e747a, #8e949a, #6e747a);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-    -1px 0 3px rgba(0, 0, 0, 0.15);
-}
-
-/* Right side — power/side button */
-.phone-case::after {
-  content: "";
-  position: absolute;
-  right: -2.5px;
-  top: 218px;
-  width: 3px;
-  height: 56px;
-  border-radius: 0 2px 2px 0;
-  background: linear-gradient(90deg, #6e747a, #8e949a, #6e747a);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15),
-    1px 0 3px rgba(0, 0, 0, 0.15);
-  z-index: 1;
+  display: none;
 }
 
 /* ── Phone screen ── */
 
 .phone-shell {
-  position: relative;
-  width: var(--phone-screen-width);
-  height: var(--phone-screen-height);
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  border-radius: var(--phone-screen-radius);
-  background: #ffffff;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
-  padding: 12px;
+  padding: 0;
   isolation: isolate;
+  position: relative;
 }
 
 .phone-shell::before {
@@ -1056,7 +973,7 @@
 
 /* ── Mobile responsive ── */
 
-@media (max-width: 500px) and (hover: none) and (pointer: coarse) {
+@media (min-width: 0px) {
 
   /* 用户在设置里显式开启「显示系统状态栏」且运行时不在全屏时，控制器才会挂
      data-pwa-display-mode 标记（见 pwa-manifest-injector）：此时所有 App 共用系统
