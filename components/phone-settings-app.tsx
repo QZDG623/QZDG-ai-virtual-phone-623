@@ -26,6 +26,7 @@ import { CardGrid, FeaturedCard, type CardItem, type FeaturedCardItem } from "./
 import { GlassIcon } from "./ui/glass-icon";
 import { Toggle } from "./ui/form";
 import { loadChatAppSettings, saveChatAppSettings } from "@/lib/chat-storage";
+import { isNotificationEnabled, requestNotificationPermission } from "@/lib/browser-notification";
 import { loadKeepAlive, saveKeepAlive } from "@/lib/weixin-storage";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
 
@@ -110,6 +111,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
     const [promptViewerEnabled, setPromptViewerEnabled] = useState(false);
     const [quickActionEnabled, setQuickActionEnabled] = useState(false);
     const [keepAlive, setKeepAlive] = useState(false);
+    const [browserNotificationsEnabled, setBrowserNotificationsEnabled] = useState(false);
     // 角色电脑：施工中弹窗（返回 / 仍要看看）
     const pageBodyRef = useRef<HTMLDivElement | null>(null);
 
@@ -242,6 +244,21 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         onNotice(next ? "已开启后台保活" : "已关闭后台保活");
     }, [onNotice]);
 
+    const handleBrowserNotificationsChange = useCallback(async (next: boolean) => {
+        if (next) {
+            const granted = await requestNotificationPermission();
+            if (!granted) {
+                onNotice("请在浏览器设置中允许此网站发送通知");
+                setBrowserNotificationsEnabled(false);
+                saveChatAppSettings({ ...loadChatAppSettings(), browserNotificationsEnabled: false });
+                return;
+            }
+        }
+        setBrowserNotificationsEnabled(next);
+        saveChatAppSettings({ ...loadChatAppSettings(), browserNotificationsEnabled: next });
+        onNotice(next ? "已开启系统级弹窗通知" : "已关闭系统级弹窗通知");
+    }, [onNotice]);
+
     const imageGenerationItem = SETTINGS_MENU.find(i => i.id === "imageGeneration")!;
     const imageGenerationFeaturedItem: FeaturedCardItem = {
         id: imageGenerationItem.id,
@@ -330,6 +347,7 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
         setTimeAware(settings.timeAware !== false);
         setPromptViewerEnabled(settings.promptViewerEnabled === true);
         setQuickActionEnabled(settings.quickActionEnabled === true);
+        setBrowserNotificationsEnabled(settings.browserNotificationsEnabled === true && Notification.permission === "granted");
         setKeepAlive(loadKeepAlive());
     }, []);
 
@@ -421,6 +439,16 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                     <div className="card-featured-desc">切到后台时尽量保持网页运行，主动消息与轮询不中断</div>
                                 </div>
                                 <Toggle checked={keepAlive} onChange={handleKeepAliveChange} className="settings-toggle-control" />
+                            </div>
+                            <div className="app-card card-featured settings-toggle-card">
+                                <span className="card-icon card-icon-glass">
+                                    <GlassIcon name="chat" />
+                                </span>
+                                <div className="card-featured-body">
+                                    <div className="card-featured-label">系统级弹窗通知</div>
+                                    <div className="card-featured-desc">当切到后台或锁屏时，有新消息将触发手机真实系统弹窗</div>
+                                </div>
+                                <Toggle checked={browserNotificationsEnabled} onChange={handleBrowserNotificationsChange} className="settings-toggle-control" />
                             </div>
                         </div>
                         {isAdmin ? (

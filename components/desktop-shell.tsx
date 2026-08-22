@@ -2433,6 +2433,13 @@ html,body{margin:0;padding:0;width:100%;height:100%;background:#121110;color:rgb
         avatar: detail.avatar ?? char?.avatar ?? null,
         isGroup,
       });
+      
+      // 发送手机/浏览器真实系统级通知
+      sendBrowserNotification(title, {
+        body: detail.body.trim(),
+        icon: detail.avatar ?? char?.avatar ?? undefined
+      });
+
       chatMessageNoticeTimerRef.current = window.setTimeout(() => {
         setChatMessageNotice(null);
         chatMessageNoticeTimerRef.current = null;
