@@ -24,6 +24,38 @@ export type LunarInfo = {
   isFirstDay: boolean;
   /** 日历格子里显示的小字：初一显示月名，其余显示日名 */
   cellLabel: string;
+  /** 节日名称 */
+  holiday?: string;
+};
+
+// 常见公历节日（月-日）
+const SOLAR_HOLIDAYS: Record<string, string> = {
+  "01-01": "元旦",
+  "02-14": "情人节",
+  "03-08": "妇女节",
+  "03-12": "植树节",
+  "05-01": "劳动节",
+  "05-04": "青年节",
+  "06-01": "儿童节",
+  "08-01": "建军节",
+  "09-10": "教师节",
+  "10-01": "国庆节",
+  "12-24": "平安夜",
+  "12-25": "圣诞节",
+};
+
+// 常见农历节日（月名-日名）
+const LUNAR_HOLIDAYS: Record<string, string> = {
+  "正月-初一": "春节",
+  "正月-十五": "元宵",
+  "二月-初二": "龙抬头",
+  "五月-初五": "端午",
+  "七月-七夕": "七夕",
+  "七月-十五": "中元",
+  "八月-十五": "中秋",
+  "九月-初九": "重阳",
+  "腊月-初八": "腊八",
+  "腊月-廿三": "小年",
 };
 
 let lunarFormatter: Intl.DateTimeFormat | null | undefined;
@@ -68,11 +100,26 @@ export function getLunarInfo(date: Date): LunarInfo | null {
           ? `${isLeap ? "闰" : ""}${LUNAR_MONTH_NAMES[monthIndex]}`
           : `${isLeap ? "闰" : ""}${monthText}月`;
         const dayLabel = LUNAR_DAY_NAMES[dayNumber - 1];
+        
+        // 匹配农历与公历节日
+        const mStr = String(date.getMonth() + 1).padStart(2, "0");
+        const dStr = String(date.getDate()).padStart(2, "0");
+        const solarKey = `${mStr}-${dStr}`;
+        const solarHoliday = SOLAR_HOLIDAYS[solarKey];
+
+        // 农历节日匹配（只按月名和日名精确匹配）
+        // 如 "正月-初一" -> "春节"
+        const lunarKey = `${monthLabel}-${dayLabel}`;
+        const lunarHoliday = LUNAR_HOLIDAYS[lunarKey];
+
+        const holiday = lunarHoliday || solarHoliday;
+        
         info = {
           monthLabel,
           dayLabel,
           isFirstDay: dayNumber === 1,
-          cellLabel: dayNumber === 1 ? monthLabel : dayLabel,
+          cellLabel: holiday || (dayNumber === 1 ? monthLabel : dayLabel),
+          holiday,
         };
       }
     } catch {

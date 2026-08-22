@@ -359,7 +359,7 @@ export function CalendarDetailPage({
                   aria-label={`${d.getMonth() + 1}月${d.getDate()}日`}
                 >
                   <span className="calendar-strip-num">{d.getDate()}</span>
-                  <span className="calendar-strip-lunar">{lunar?.cellLabel ?? ""}</span>
+                  <span className="calendar-strip-lunar" style={lunar?.holiday ? { color: "var(--c-calendar-today, #ff3b30)", fontWeight: "500" } : undefined}>{lunar?.cellLabel ?? ""}</span>
                   {cycle ? <i className="calendar-cycle-dot calendar-strip-cycle" data-type={cycle.type} aria-hidden="true" /> : null}
                 </button>
               );
@@ -385,13 +385,15 @@ export function CalendarDetailPage({
               <div key={iso} className="calendar-tl-day-head" data-today={iso === todayIso ? "true" : undefined}>
                 {daysPerPage >= 5 ? (
                   <>
-                    <b>{d.getDate()}日</b>
-                    <span>{WEEK_LABEL[d.getDay()]}</span>
+                    <b style={lunar?.holiday ? { color: "var(--c-calendar-today, #ff3b30)" } : undefined}>{d.getDate()}日</b>
+                    <span style={lunar?.holiday ? { color: "var(--c-calendar-today, #ff3b30)", fontWeight: "500" } : undefined}>{lunar?.holiday || WEEK_LABEL[d.getDay()]}</span>
                   </>
                 ) : (
                   <>
-                    <b>{d.getMonth() + 1}月{d.getDate()}日 – {WEEK_LABEL[d.getDay()]}</b>
-                    <span>{lunar ? `${lunar.monthLabel}${lunar.isFirstDay ? "" : lunar.dayLabel}` : ""}</span>
+                    <b style={lunar?.holiday ? { color: "var(--c-calendar-today, #ff3b30)" } : undefined}>{d.getMonth() + 1}月{d.getDate()}日 – {WEEK_LABEL[d.getDay()]}</b>
+                    <span style={lunar?.holiday ? { color: "var(--c-calendar-today, #ff3b30)", fontWeight: "500" } : undefined}>
+                      {lunar?.holiday ? `🎉 ${lunar.holiday}` : (lunar ? `${lunar.monthLabel}${lunar.isFirstDay ? "" : lunar.dayLabel}` : "")}
+                    </span>
                   </>
                 )}
               </div>

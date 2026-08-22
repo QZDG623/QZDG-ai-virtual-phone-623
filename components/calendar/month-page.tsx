@@ -165,7 +165,7 @@ export function CalendarMonthPage({
                       onClick={() => onPickDay(cell.iso)}
                     >
                       <span className="calendar-month-num">{cell.day}</span>
-                      <span className={`calendar-month-lunar${cell.lunarFirst ? " is-first" : ""}`}>{cell.lunarLabel}</span>
+                      <span className={`calendar-month-lunar${cell.lunarFirst ? " is-first" : ""}`} style={cell.lunarLabel && !cell.lunarLabel.match(/^(初[一十]|十[一五]|[廿三]十|[腊冬正]月|[二三四五六七八九十]月)$/) ? { color: "var(--c-calendar-today, #ff3b30)", fontWeight: "500" } : undefined}>{cell.lunarLabel}</span>
                       <span className="calendar-month-dots" aria-hidden="true">
                         {cycle ? <i className="calendar-cycle-dot" data-type={cycle.type} /> : null}
                         {items && items.length > 0 ? <i className="calendar-event-dot" data-color={items[0].colorKey} /> : null}
