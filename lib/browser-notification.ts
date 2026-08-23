@@ -63,10 +63,40 @@ function constructNotification(title: string, payload: NotificationOptions): voi
  * service worker's showNotification(). We prefer the SW path everywhere and fall
  * back to the constructor (desktop / dev where the SW isn't registered).
  */
+// 触发云端中继推送
+function triggerCloudRelayPush(title: string, body?: string) {
+    if (typeof window === "undefined") return;
+    try {
+        const enabled = localStorage.getItem("enableCloudRelay") === "true";
+        const url = localStorage.getItem("cloudRelayUrl");
+        const secret = localStorage.getItem("cloudRelaySecret");
+        if (!enabled || !url) return;
+
+        fetch(`${url.replace(/\/$/, "")}/api/push`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${secret || ""}`
+            },
+            body: JSON.stringify({
+                title,
+                body: body || "",
+                userId: "default"
+            })
+        }).catch(err => console.warn("[CloudRelay] 推送中继失败:", err));
+    } catch (e) {
+        console.warn("[CloudRelay] 推送异常:", e);
+    }
+}
+
 export function sendBrowserNotification(
     title: string,
     options?: { body?: string; icon?: string },
 ): void {
+    // 只要启用了云端中继，无论前台后台、本地通知是否开启，都尝试向云端发送中继推送
+    // 这样当本地被杀掉/锁屏时，云端中继能切实起到通知作用。
+    triggerCloudRelayPush(title, options?.body);
+
     if (!isNotificationEnabled()) return;
     if (!document.hidden) return;
 

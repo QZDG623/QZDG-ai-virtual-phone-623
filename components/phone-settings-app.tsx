@@ -29,6 +29,7 @@ import { loadChatAppSettings, saveChatAppSettings } from "@/lib/chat-storage";
 import { isNotificationEnabled, requestNotificationPermission } from "@/lib/browser-notification";
 import { loadKeepAlive, saveKeepAlive } from "@/lib/weixin-storage";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
+import { CloudRelaySettingsSection } from "./settings/cloud-relay-settings";
 
 export const SettingsContext = createContext<{
     setSubpageTitle: (title: string | null) => void;
@@ -450,6 +451,9 @@ export function PhoneSettingsApp({ onClose, onNotice }: SettingsPageProps) {
                                 </div>
                                 <Toggle checked={browserNotificationsEnabled} onChange={handleBrowserNotificationsChange} className="settings-toggle-control" />
                             </div>
+                            
+                            {/* 云端中继推送 (Cloudflare Worker Web Push) */}
+                            <CloudRelaySettingsSection onNotice={onNotice} />
                         </div>
                         {isAdmin ? (
                             <div className="settings-moderation-section">

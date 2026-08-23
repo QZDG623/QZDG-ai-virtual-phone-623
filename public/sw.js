@@ -92,3 +92,29 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(cacheFirst(request));
   }
 });
+
+// 监听 Web Push 推送事件
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  try {
+    const data = event.data.json();
+    const title = data.title || "新联系";
+    const options = {
+      body: data.body || "",
+      icon: data.icon || "/icon-192.png",
+      badge: "/icon-192.png",
+      data: data.data || {},
+      tag: data.tag || "cf-relay-push",
+      renotify: true,
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+  } catch (err) {
+    const text = event.data.text();
+    event.waitUntil(
+      self.registration.showNotification("新联系", {
+        body: text,
+        icon: "/icon-192.png",
+      })
+    );
+  }
+});
