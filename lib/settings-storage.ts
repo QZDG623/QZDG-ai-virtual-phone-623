@@ -885,10 +885,19 @@ export function resolveBinding(
         userIdentityId: global.userIdentityId,
         worldBookIds: global.worldBookIds ? [...global.worldBookIds] : undefined,
         regexIds: global.regexIds ? [...global.regexIds] : undefined,
+        selectedModelName: global.selectedModelName,
     };
 
     const applySlot = (slot: BindingSlot): void => {
-        if (slot.apiConfigId) resolved.apiConfigId = slot.apiConfigId;
+        if (slot.apiConfigId) {
+            resolved.apiConfigId = slot.apiConfigId;
+            // 解决跨层级继承问题：如果子层级重写了 apiConfigId 并且指定了 selectedModelName，则应用它；
+            // 如果子层级重写了 apiConfigId 但没有指定 selectedModelName，需要清除父层级的 selectedModelName 继承，改用它的 defaultModel。
+            resolved.selectedModelName = slot.selectedModelName;
+        } else {
+            // 如果子层级没有重写 apiConfigId，但指定了 selectedModelName，则可以单独重写模型
+            if (slot.selectedModelName) resolved.selectedModelName = slot.selectedModelName;
+        }
         if (slot.voiceConfigId) resolved.voiceConfigId = slot.voiceConfigId;
         if (slot.presetId) resolved.presetId = slot.presetId;
         if (slot.userIdentityId) resolved.userIdentityId = slot.userIdentityId;

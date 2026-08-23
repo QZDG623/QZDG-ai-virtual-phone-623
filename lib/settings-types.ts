@@ -221,6 +221,7 @@ export type BindingSlot = {
     userIdentityId?: string;
     worldBookIds?: string[];
     regexIds?: string[];
+    selectedModelName?: string; // 增加在绑定插槽中指定具体模型名称的支持，实现全局/角色在同一API站子下各选各的模型
 };
 
 // Character binding: character defaults + per-app overrides

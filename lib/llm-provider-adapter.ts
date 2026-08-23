@@ -240,13 +240,17 @@ export function buildProviderRequest(
     preset: PresetConfig | null,
     messages: LlmRequestMessage[],
     options: ProviderRequestOptions = {},
+    selectedModelName?: string, // 传入具体覆盖的模型名称，以实现全局与角色模型不互通的需求
 ): LlmRequestPayload {
     const baseUrl = determineBaseUrl(config);
+    const resolvedConfig = selectedModelName 
+        ? { ...config, defaultModel: selectedModelName } 
+        : config;
     if (!baseUrl) throw new Error(`API 地址无效：provider=${config.provider}`);
     if (!config.apiKey) throw new Error(`API Key 为空：provider=${config.provider}`);
 
-    const nativeToolProtocol = options.tools && options.tools.length > 0 ? nativeToolProtocolForConfig(config) : null;
-    const providerKind = providerKindForConfig(config, { nativeToolProtocol });
+    const nativeToolProtocol = options.tools && options.tools.length > 0 ? nativeToolProtocolForConfig(resolvedConfig) : null;
+    const providerKind = providerKindForConfig(resolvedConfig, { nativeToolProtocol });
 
     if (options.tools && options.tools.length > 0 && !nativeToolProtocol) {
         throw new Error("当前 API 配置未启用原生工具调用。");
@@ -254,16 +258,16 @@ export function buildProviderRequest(
 
     // 图像识别关闭时的总闸：无论哪条路径塞入了 image_url part，一律降级为
     // "[图片]" 文本，避免不支持视觉的模型（如 DeepSeek）收到 multipart 返回 400。
-    const guardedMessages = config.enableImageRecognition === true ? messages : stripVisionParts(messages);
+    const guardedMessages = resolvedConfig.enableImageRecognition === true ? messages : stripVisionParts(messages);
     const providerMessages = ensureProviderHasUserMessage(normalizeNativeToolMessageAdjacency(guardedMessages));
 
     if (providerKind === "anthropic") {
-        return buildAnthropicRequest(config, preset, baseUrl, providerMessages, options);
+        return buildAnthropicRequest(resolvedConfig, preset, baseUrl, providerMessages, options);
     }
     if (providerKind === "gemini") {
-        return buildGeminiRequest(config, preset, baseUrl, providerMessages, options);
+        return buildGeminiRequest(resolvedConfig, preset, baseUrl, providerMessages, options);
     }
-    return buildOpenAICompatibleRequest(config, preset, baseUrl, providerMessages, options);
+    return buildOpenAICompatibleRequest(resolvedConfig, preset, baseUrl, providerMessages, options);
 }
 
 // 剥离逻辑收敛到 api-helpers（更底层，微信助手运行时也照抄同一份正则）；
@@ -274,8 +278,9 @@ export function buildProviderDebugMessages(
     config: ApiConfig,
     preset: PresetConfig | null,
     messages: LLMMessage[],
+    selectedModelName?: string,
 ): LlmDebugMessage[] {
-    const request = buildProviderRequest(config, preset, toLlmRequestMessages(messages));
+    const request = buildProviderRequest(config, preset, toLlmRequestMessages(messages), {}, selectedModelName);
     return debugMessagesFromRequest(request);
 }
 

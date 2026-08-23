@@ -173,17 +173,16 @@ export function QuickActionFloat() {
     }, [config, persistConfig, scope, selectedCharId]);
 
     const handleModelChange = useCallback((apiId: string, modelName: string) => {
-        const nextConfigs = apiConfigs.map(c => {
-            if (c.id === apiId) {
-                return { ...c, defaultModel: modelName };
-            }
-            return c;
-        });
-        setApiConfigs(nextConfigs);
-        saveApiConfigs(nextConfigs);
-        // 触发绑定更新事件，确保聊天应用能立刻感知到模型切换
-        window.dispatchEvent(new CustomEvent("settings-bindings-updated"));
-    }, [apiConfigs]);
+        if (scope === "global") {
+            persistConfig({ ...config, globalDefaults: { ...config.globalDefaults, apiConfigId: apiId, selectedModelName: modelName } });
+        } else if (selectedCharId) {
+            const binding = getCharacterBinding(config, selectedCharId);
+            persistConfig(setCharacterBinding(config, {
+                ...binding,
+                defaults: { ...binding.defaults, apiConfigId: apiId, selectedModelName: modelName },
+            }));
+        }
+    }, [config, persistConfig, scope, selectedCharId]);
 
     const updateWorldBooks = useCallback((worldBookIds: string[]) => {
         const nextIds = worldBookIds.length > 0 ? worldBookIds : undefined;
@@ -409,7 +408,9 @@ export function QuickActionFloat() {
                                             {selectedModels.length > 0 && (
                                                 <div className="flex flex-wrap gap-1.5 pl-3 mt-1">
                                                     {selectedModels.map(model => {
-                                                        const isModelActive = api.defaultModel === model;
+                                                        // 新的模型激活状态判断：如果在当前绑定插槽中指定了具体 model，则使用；否则，如果是全局/继承状态，取该 API 的默认模型。
+                                                        const activeModel = currentSlot.selectedModelName || api.defaultModel;
+                                                        const isModelActive = activeModel === model;
                                                         return (
                                                             <button
                                                                 key={model}

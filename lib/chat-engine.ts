@@ -606,8 +606,9 @@ export function previewMessagesForApi(
     config: ApiConfig,
     preset: PresetConfig | null,
     messages: LLMMessage[],
+    selectedModelName?: string,
 ): LLMMessage[] {
-    return buildProviderDebugMessages(config, preset, messages).map(message => ({
+    return buildProviderDebugMessages(config, preset, messages, selectedModelName).map(message => ({
         role: message.role as LLMMessage["role"],
         content: message.content,
         _debugMeta: { marker: message.marker },
@@ -692,6 +693,7 @@ async function readSseStream(
     response: Response,
     providerKind: ChatCompletionStreamResult["providerKind"],
     callbacks?: ChatCompletionStreamCallbacks,
+    stripTimestamps = true,
 ): Promise<{ content: string; rawResponse: string }> {
     if (!response.body) throw new ChatEngineError("流式响应没有 body。");
     const reader = response.body.getReader();
@@ -699,7 +701,12 @@ async function readSseStream(
     let buffer = "";
     let content = "";
     let rawResponse = "";
-    const contentStripper = createStreamingTimestampStripper();
+    // 时间戳剥离器会一直扣住流尾巴的 64 个字符等括号闭合，流结束才吐出来。
+    // 要求"所见即模型所写"的调用方（独家特调）把它整个关掉：增量来一个字出一个字，
+    // 否则模型在末尾写机括标记行（〔记〕这类）时，整行都压在扣留窗里，看起来像卡死。
+    const contentStripper = stripTimestamps
+        ? createStreamingTimestampStripper()
+        : { push: (text: string) => text, flush: () => "" };
 
     // 容错解析：中转把长 JSON 行切开时做碎片重组，不再静默丢增量（见 sse-json.ts）
     const sseParser = createSseJsonParser();
@@ -757,11 +764,14 @@ export async function sendLLMStreamRequest(
     meta?: { characterName?: string; userName?: string },
     options?: {
         skipOutputRegex?: boolean;
+        /** 不剥幻觉时间戳：流式增量原样直出（不扣尾巴），落库文本与流出的一字不差 */
+        skipTimestampStrip?: boolean;
         includeReasoning?: boolean;
         appId?: string;
         appTags?: string[];
         followUpCount?: number;
         signal?: AbortSignal;
+        selectedModelName?: string; // 传递具体覆盖的模型
     },
     callbacks?: ChatCompletionStreamCallbacks,
 ): Promise<ChatCompletionStreamResult> {
@@ -777,7 +787,7 @@ export async function sendLLMStreamRequest(
         },
     } : undefined;
     const requestMessages = toLlmRequestMessages(afterPlugins.messages);
-    const request = buildProviderRequest(config, effectivePreset, requestMessages, { stream: true });
+    const request = buildProviderRequest(config, effectivePreset, requestMessages, { stream: true }, options?.selectedModelName);
     const requestBodyJson = JSON.stringify(request.body);
     const llmAbort = new AbortController();
     const llmTimeout = setTimeout(() => llmAbort.abort(), 500_000);
@@ -794,11 +804,11 @@ export async function sendLLMStreamRequest(
             const errorText = await response.text();
             throw new ChatEngineError(`API Stream Error ${response.status}: ${errorText}`);
         }
-        const { content: streamedContent, rawResponse } = await readSseStream(response, request.providerKind, pluginCallbacks ?? callbacks);
+        const { content: streamedContent, rawResponse } = await readSseStream(response, request.providerKind, pluginCallbacks ?? callbacks, !options?.skipTimestampStrip);
         if (!streamedContent.trim()) {
             throw new ChatEngineError("流式响应没有解析到文本增量。");
         }
-        let rawOutput = stripHallucinatedTimestamps(streamedContent.trim());
+        let rawOutput = options?.skipTimestampStrip ? streamedContent.trim() : stripHallucinatedTimestamps(streamedContent.trim());
         rawOutput = await applyChatPluginLlmResponse(rawOutput, pluginPurpose);
 
         // Store API log entry — mirror sendLLMRequest so streaming calls also show up
@@ -863,13 +873,14 @@ export async function sendLLMRequest(
         followUpCount?: number;
         debugSessionId?: string;
         signal?: AbortSignal;
+        selectedModelName?: string; // 传递具体覆盖的模型名称
     },
 ): Promise<string> {
     const pluginPurpose = options?.appId ?? "chat";
     const afterPlugins = await applyChatPluginLlmRequest(preset, messages, pluginPurpose, options?.debugSessionId);
     const effectivePreset = afterPlugins.preset;
     const requestMessages = toLlmRequestMessages(afterPlugins.messages);
-    const request = buildProviderRequest(config, effectivePreset, requestMessages);
+    const request = buildProviderRequest(config, effectivePreset, requestMessages, {}, options?.selectedModelName);
     publishDebugPromptSnapshot({ request, config, preset: effectivePreset, meta, options, requestKind: "completion" });
     const requestBodyJson = JSON.stringify(request.body);
     const requestBodySize = requestBodyJson.length;
@@ -1230,12 +1241,13 @@ export async function sendLLMToolRequest(
         followUpCount?: number;
         debugSessionId?: string;
         signal?: AbortSignal;
+        selectedModelName?: string; // 传递具体覆盖的模型名称
     },
 ): Promise<LLMToolRequestResult> {
     const pluginPurpose = options?.appId ?? "chat";
     const afterPlugins = await applyChatPluginLlmRequest(preset, messages, pluginPurpose, options?.debugSessionId);
     const effectivePreset = afterPlugins.preset;
-    const request = buildProviderRequest(config, effectivePreset, afterPlugins.messages, { tools });
+    const request = buildProviderRequest(config, effectivePreset, afterPlugins.messages, { tools }, options?.selectedModelName);
     publishDebugPromptSnapshot({ request, config, preset: effectivePreset, meta, options, requestKind: "native-tools", tools });
     const requestBodyJson = JSON.stringify(request.body);
     const llmAbort = new AbortController();
@@ -1766,6 +1778,7 @@ export async function buildChatPromptMessages(
     regexes: RegexConfig[];
     userIdentity: ReturnType<typeof resolveUserIdentity>;
     toolsEnabled: boolean;
+    selectedModelName?: string;
 }> {
     const chars = loadCharacters();
     const character = chars.find(c => c.id === session.contactId);
@@ -1782,6 +1795,7 @@ export async function buildChatPromptMessages(
     const apiConfigs = loadApiConfigs();
     const config = apiConfigs.find(c => c.id === activeSlot.apiConfigId);
     if (!config) throw new ChatEngineError(`API Configuration not found for ${character.name}.`);
+    const selectedModelName = activeSlot.selectedModelName;
 
     const presets = loadPresets();
     let preset = activeSlot.presetId ? presets.find(p => p.id === activeSlot.presetId) || null : null;
@@ -1941,7 +1955,7 @@ export async function buildChatPromptMessages(
     }
     appendEmptyGenerateGuardMessage(llmMessages, config, historyForPrompt);
 
-    return { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled };
+    return { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled, selectedModelName };
 }
 
 export type ChatCompletionCallbacks = {
@@ -2030,9 +2044,10 @@ async function generateNativeChatCompletion(
         userIdentity: ReturnType<typeof resolveUserIdentity>;
         options?: ChatPromptBuildOptions & { signal?: AbortSignal };
         callbacks?: ChatCompletionCallbacks;
+        selectedModelName?: string;
     },
 ): Promise<ChatCompletionResult> {
-    const { session, llmMessages, character, config, preset, regexes, userIdentity, options, callbacks } = params;
+    const { session, llmMessages, character, config, preset, regexes, userIdentity, options, callbacks, selectedModelName } = params;
     const enabledTools = getEnabledTools(options?.appId ?? "chat");
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
     const persistedSession = loadChatSessions().find(item => item.id === session.id);
@@ -2068,6 +2083,7 @@ async function generateNativeChatCompletion(
                     followUpCount: options?.followUpCount,
                     debugSessionId: session.id,
                     signal: options?.signal,
+                    selectedModelName,
                 },
             );
         } catch (err) {
@@ -2273,7 +2289,7 @@ export async function generateChatCompletion(
     options?: ChatPromptBuildOptions & { signal?: AbortSignal },
     callbacks?: ChatCompletionCallbacks,
 ): Promise<ChatCompletionResult> {
-    const { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, history, options);
+    const { llmMessages, character, config, preset, regexes, userIdentity, toolsEnabled, selectedModelName } = await buildChatPromptMessages(session, history, options);
     const requestAppTags = mergeAppTags(options?.appTags, options?.promptProfile?.appTags, options?.appId ?? "chat");
 
     if (toolsEnabled && nativeToolProtocolForConfig(config) && getEnabledTools(options?.appId ?? "chat").length > 0) {
@@ -2287,6 +2303,7 @@ export async function generateChatCompletion(
             userIdentity,
             options,
             callbacks,
+            selectedModelName,
         });
     }
 
@@ -2306,6 +2323,7 @@ export async function generateChatCompletion(
                 debugSessionId: session.id,
                 signal: options?.signal,
                 onReasoning: callbacks?.onReasoning,
+                selectedModelName,
             });
         } catch (err) {
             const errMsg = `⚠️ 回复生成失败: ${err instanceof Error ? err.message : String(err)}`;
@@ -2471,6 +2489,7 @@ export async function generateChatCompletion(
                         debugSessionId: session.id,
                         signal: options?.signal,
                         onReasoning: callbacks?.onReasoning,
+                        selectedModelName,
                     });
                     throwIfAborted(options?.signal);
                     await callbacks?.onTextPart?.(finalOutput);
@@ -2616,7 +2635,7 @@ export async function previewPromptRequestSnapshot(
         effectiveHistory = annotated;
     }
 
-    const { llmMessages, character, config, preset, userIdentity, toolsEnabled } = await buildChatPromptMessages(session, effectiveHistory, options);
+    const { llmMessages, character, config, preset, userIdentity, toolsEnabled, selectedModelName } = await buildChatPromptMessages(session, effectiveHistory, options);
     const requestMessages = toLlmRequestMessages(llmMessages);
     const enabledTools = toolsEnabled ? getEnabledTools(options?.appId ?? "chat") : [];
     const meta = { characterName: character.name, userName: userIdentity?.name };
@@ -2631,7 +2650,7 @@ export async function previewPromptRequestSnapshot(
             characterName: character.name,
             userName: userIdentity?.name ?? "用户",
         });
-        const request = buildProviderRequest(config, preset, requestMessages, { tools: nativeBundle.definitions });
+        const request = buildProviderRequest(config, preset, requestMessages, { tools: nativeBundle.definitions }, selectedModelName);
         return publishDebugPromptSnapshot({
             request,
             config,
@@ -2647,7 +2666,7 @@ export async function previewPromptRequestSnapshot(
         });
     }
 
-    const request = buildProviderRequest(config, preset, requestMessages);
+    const request = buildProviderRequest(config, preset, requestMessages, {}, selectedModelName);
     return publishDebugPromptSnapshot({
         request,
         config,
