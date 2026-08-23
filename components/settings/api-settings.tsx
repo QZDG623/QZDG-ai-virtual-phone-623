@@ -50,9 +50,25 @@ export function ApiSettings() {
         const loaded = loadApiConfigs();
         if (loaded.length > 0) {
             setConfigs(loaded);
+            // 初始化 fetchedModels，把已选中的模型或默认模型放入，以供用户直接勾选
+            const initialFetched: Record<string, string[]> = {};
+            loaded.forEach(c => {
+                const models = new Set<string>();
+                if (c.defaultModel) models.add(c.defaultModel);
+                if (c.selectedModels) c.selectedModels.forEach(m => models.add(m));
+                if (models.size > 0) {
+                    initialFetched[c.id] = Array.from(models);
+                }
+            });
+            setFetchedModels(initialFetched);
         } else {
             setConfigs(DEFAULT_CONFIGS);
             saveApiConfigs(DEFAULT_CONFIGS);
+            const initialFetched: Record<string, string[]> = {};
+            if (DEFAULT_CONFIGS[0]?.defaultModel) {
+                initialFetched[DEFAULT_CONFIGS[0].id] = [DEFAULT_CONFIGS[0].defaultModel];
+            }
+            setFetchedModels(initialFetched);
         }
         setIsLoaded(true);
     }, []);
@@ -152,6 +168,13 @@ export function ApiSettings() {
                 throw new Error("返回数据格式不符合预期");
             }
             setFetchedModels(prev => ({ ...prev, [config.id]: modelNames }));
+            
+            // 自动把默认模型加入 selectedModels 如果它不在里面的话
+            const currentSelected = config.selectedModels || [];
+            if (config.defaultModel && !currentSelected.includes(config.defaultModel) && modelNames.includes(config.defaultModel)) {
+                updateConfig(config.id, { selectedModels: [...currentSelected, config.defaultModel] });
+            }
+
             setTestResult(prev => ({ ...prev, [config.id]: { success: true, message: `成功获取 ${modelNames.length} 个模型` } }));
         } catch (error: unknown) {
             const msg = error instanceof Error ? error.message : String(error);
@@ -382,6 +405,88 @@ export function ApiSettings() {
                                                         placeholder="gpt-4o, claude-3-opus..."
                                                         className="ui-input flex-1"
                                                     />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* 选择模型 (Select Models) */}
+                                        <div className="flex flex-col gap-1">
+                                            <label className="menu-desc ml-1 flex items-center justify-between">
+                                                <span>选择模型 (必选，用于快捷操作切换)</span>
+                                                {fetchedModels[config.id] && fetchedModels[config.id].length > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const allModels = fetchedModels[config.id] || [];
+                                                            updateConfig(config.id, { selectedModels: allModels });
+                                                        }}
+                                                        className="text-[10px] text-blue-500 hover:underline"
+                                                    >
+                                                        全选
+                                                    </button>
+                                                )}
+                                            </label>
+                                            <div className="border border-[var(--c-border)] rounded-[14px] bg-white p-3 max-h-[160px] overflow-y-auto flex flex-col gap-2">
+                                                {fetchedModels[config.id] && fetchedModels[config.id].length > 0 ? (
+                                                    fetchedModels[config.id].map(m => {
+                                                        const isChecked = (config.selectedModels || []).includes(m);
+                                                        return (
+                                                            <label key={m} className="flex items-center gap-2.5 cursor-pointer text-xs select-none">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={isChecked}
+                                                                    onChange={(e) => {
+                                                                        const current = config.selectedModels || [];
+                                                                        const next = e.target.checked
+                                                                            ? [...current, m]
+                                                                            : current.filter(item => item !== m);
+                                                                        updateConfig(config.id, { selectedModels: next });
+                                                                    }}
+                                                                    className="w-4 h-4 rounded-full border border-gray-300 text-black focus:ring-0 focus:ring-offset-0 cursor-pointer accent-black"
+                                                                    style={{ appearance: "none", WebkitAppearance: "none", border: "1px solid #ccc", borderRadius: "50%", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                                                                />
+                                                                <span
+                                                                    style={{
+                                                                        width: "16px",
+                                                                        height: "16px",
+                                                                        borderRadius: "50%",
+                                                                        border: "1px solid var(--c-border)",
+                                                                        display: "inline-flex",
+                                                                        alignItems: "center",
+                                                                        justify: "center",
+                                                                        flexShrink: 0,
+                                                                        backgroundColor: isChecked ? "black" : "transparent",
+                                                                        position: "relative",
+                                                                        marginLeft: "-26.5px"
+                                                                    }}
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        const current = config.selectedModels || [];
+                                                                        const next = current.includes(m)
+                                                                            ? current.filter(item => item !== m)
+                                                                            : [...current, m];
+                                                                        updateConfig(config.id, { selectedModels: next });
+                                                                    }}
+                                                                >
+                                                                    {isChecked && (
+                                                                        <span style={{
+                                                                            width: "6px",
+                                                                            height: "6px",
+                                                                            borderRadius: "50%",
+                                                                            backgroundColor: "white",
+                                                                            position: "absolute",
+                                                                            left: "50%",
+                                                                            top: "50%",
+                                                                            transform: "translate(-50%, -50%)"
+                                                                        }} />
+                                                                    )}
+                                                                </span>
+                                                                <span className="truncate flex-1" style={{ marginLeft: "10px" }}>{m}</span>
+                                                            </label>
+                                                        );
+                                                    })
+                                                ) : (
+                                                    <span className="text-xs text-gray-400 text-center py-2">请先点击下方“拉取模型列表”</span>
                                                 )}
                                             </div>
                                         </div>

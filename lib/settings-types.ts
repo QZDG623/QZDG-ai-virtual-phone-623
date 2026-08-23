@@ -120,6 +120,7 @@ export type ApiConfig = {
     apiKey: string;
     baseUrl?: string;
     defaultModel: string;
+    selectedModels?: string[];
     enableNativeTools?: boolean;
     enableImageRecognition: boolean;
     enableImageGeneration: boolean;

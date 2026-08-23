@@ -9,6 +9,7 @@ import {
     loadBindingConfig,
     loadWorldBooks,
     saveBindingConfig,
+    saveApiConfigs,
     setCharacterBinding,
 } from "@/lib/settings-storage";
 import type { ApiConfig, BindingConfig, BindingSlot, WorldBookConfig } from "@/lib/settings-types";
@@ -170,6 +171,19 @@ export function QuickActionFloat() {
             defaults: { ...binding.defaults, apiConfigId: apiConfigId || undefined },
         }));
     }, [config, persistConfig, scope, selectedCharId]);
+
+    const handleModelChange = useCallback((apiId: string, modelName: string) => {
+        const nextConfigs = apiConfigs.map(c => {
+            if (c.id === apiId) {
+                return { ...c, defaultModel: modelName };
+            }
+            return c;
+        });
+        setApiConfigs(nextConfigs);
+        saveApiConfigs(nextConfigs);
+        // 触发绑定更新事件，确保聊天应用能立刻感知到模型切换
+        window.dispatchEvent(new CustomEvent("settings-bindings-updated"));
+    }, [apiConfigs]);
 
     const updateWorldBooks = useCallback((worldBookIds: string[]) => {
         const nextIds = worldBookIds.length > 0 ? worldBookIds : undefined;
@@ -376,19 +390,46 @@ export function QuickActionFloat() {
                                 </button>
                                 {apiConfigs.length === 0 ? (
                                     <div className="quick-action-empty">暂无 API 配置</div>
-                                ) : apiConfigs.map(api => (
-                                    <button
-                                        type="button"
-                                        key={api.id}
-                                        className="quick-action-option"
-                                        data-selected={currentSlot.apiConfigId === api.id}
-                                        disabled={characterDisabled}
-                                        onClick={() => updateApiConfig(api.id)}
-                                    >
-                                        <span>{api.name || api.defaultModel || api.provider}</span>
-                                        {currentSlot.apiConfigId === api.id ? <Check size={15} /> : null}
-                                    </button>
-                                ))}
+                                ) : apiConfigs.map(api => {
+                                    const isSelected = currentSlot.apiConfigId === api.id;
+                                    const selectedModels = api.selectedModels || [];
+                                    return (
+                                        <div key={api.id} className="flex flex-col gap-1 border-b border-black/5 last:border-0 pb-1.5 mb-1.5 last:pb-0 last:mb-0">
+                                            <button
+                                                type="button"
+                                                className="quick-action-option"
+                                                data-selected={isSelected}
+                                                disabled={characterDisabled}
+                                                onClick={() => updateApiConfig(api.id)}
+                                            >
+                                                <span className="font-semibold">{api.name || api.provider}</span>
+                                                {isSelected ? <Check size={15} /> : null}
+                                            </button>
+                                            {/* 如果勾选了多个模型，显示快速切换模型选项 */}
+                                            {selectedModels.length > 0 && (
+                                                <div className="flex flex-wrap gap-1.5 pl-3 mt-1">
+                                                    {selectedModels.map(model => {
+                                                        const isModelActive = api.defaultModel === model;
+                                                        return (
+                                                            <button
+                                                                key={model}
+                                                                type="button"
+                                                                onClick={() => handleModelChange(api.id, model)}
+                                                                className={`px-2 py-0.5 rounded-[10px] text-[10px] font-medium transition-all border ${
+                                                                    isModelActive
+                                                                        ? "bg-black text-white border-black"
+                                                                        : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100"
+                                                                }`}
+                                                            >
+                                                                {model}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </section>
 
