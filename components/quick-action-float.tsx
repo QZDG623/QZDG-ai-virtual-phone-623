@@ -174,12 +174,23 @@ export function QuickActionFloat() {
 
     const handleModelChange = useCallback((apiId: string, modelName: string) => {
         if (scope === "global") {
-            persistConfig({ ...config, globalDefaults: { ...config.globalDefaults, apiConfigId: apiId, selectedModelName: modelName } });
+            persistConfig({ 
+                ...config, 
+                globalDefaults: { 
+                    ...config.globalDefaults, 
+                    apiConfigId: apiId, 
+                    selectedModelName: modelName 
+                } 
+            });
         } else if (selectedCharId) {
             const binding = getCharacterBinding(config, selectedCharId);
             persistConfig(setCharacterBinding(config, {
                 ...binding,
-                defaults: { ...binding.defaults, apiConfigId: apiId, selectedModelName: modelName },
+                defaults: { 
+                    ...binding.defaults, 
+                    apiConfigId: apiId, 
+                    selectedModelName: modelName 
+                }
             }));
         }
     }, [config, persistConfig, scope, selectedCharId]);
@@ -408,7 +419,8 @@ export function QuickActionFloat() {
                                             {selectedModels.length > 0 && (
                                                 <div className="flex flex-wrap gap-1.5 pl-3 mt-1">
                                                     {selectedModels.map(model => {
-                                                        // 新的模型激活状态判断：如果在当前绑定插槽中指定了具体 model，则使用；否则，如果是全局/继承状态，取该 API 的默认模型。
+                                                        // 激活状态：如果当前插槽（全局或角色）有 selectedModelName，优先匹配它；
+                                                        // 否则，如果是全局/继承状态，取该 API 的 defaultModel。
                                                         const activeModel = currentSlot.selectedModelName || api.defaultModel;
                                                         const isModelActive = activeModel === model;
                                                         return (
