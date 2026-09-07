@@ -300,9 +300,12 @@ export function StoryApp({ onClose }: StoryAppProps) {
     return Object.entries(groups).map(([dateStr, count]) => ({ dateStr, count }));
   }, [messages, getMsgLocalDateStr]);
 
+  // 每次切换会话、切换角色或重新加载时，默认只显示「当前日期（今天）」的聊天记录。
+  // 如果今天没有任何聊天内容，页面将显示当前日期并提示没有内容（而非自动降级到显示其他日期）。昨天的聊天内容只可以通过侧栏点击查找到。
   useEffect(() => {
-    setSelectedDate(null);
-  }, [activeSessionId]);
+    const todayStr = getMsgLocalDateStr(new Date().toISOString());
+    setSelectedDate(todayStr);
+  }, [activeSessionId, getMsgLocalDateStr]);
 
   // 生成状态按会话记录：避免在 A 会话生成时切到 B 会话也显示"正在生成"
   const [generatingSessionIds, setGeneratingSessionIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -1159,6 +1162,20 @@ export function StoryApp({ onClose }: StoryAppProps) {
                 <div>
                   <div className="text-[calc(14px*var(--app-text-scale,1))] font-medium text-[var(--c-story-heading,#1e293b)] mb-1">故事从这里开始</div>
                   <div className="text-[calc(12px*var(--app-text-scale,1))] opacity-70">从底部输入一段引导，剧情会继续展开。</div>
+                </div>
+              </div>
+            ) : visibleMessages.length === 0 ? (
+              <div className="story-empty">
+                <BookOpenIcon width={28} height={28} opacity={0.45} />
+                <div>
+                  <div className="text-[calc(14px*var(--app-text-scale,1))] font-medium text-[var(--c-story-heading,#1e293b)] mb-1">
+                    {selectedDate === getMsgLocalDateStr(new Date().toISOString()) ? "今日暂无剧情内容" : `${selectedDate} 暂无剧情内容`}
+                  </div>
+                  <div className="text-[calc(12px*var(--app-text-scale,1))] opacity-70">
+                    {selectedDate === getMsgLocalDateStr(new Date().toISOString())
+                      ? "从底部输入一段引导，开启今天的精彩故事吧。"
+                      : "你可以通过侧栏点击切换至其他日期查找历史记录。"}
+                  </div>
                 </div>
               </div>
             ) : (
