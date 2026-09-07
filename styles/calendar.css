@@ -320,6 +320,12 @@
   padding-bottom: 1px;
 }
 
+.calendar-month-lunar.is-holiday,
+.calendar-strip-lunar.is-holiday {
+  color: var(--c-calendar-today, #ff3b30) !important;
+  font-weight: 600;
+}
+
 .calendar-month-dots {
   height: 6px;
   display: flex;

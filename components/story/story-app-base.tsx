@@ -282,6 +282,28 @@ export function StoryApp({ onClose }: StoryAppProps) {
   const [customCssDraft, setCustomCssDraft] = useState("");
   const [foldTagsDraft, setFoldTagsDraft] = useState("");
   const [contextExcludedTagsDraft, setContextExcludedTagsDraft] = useState("");
+
+  const getMsgLocalDateStr = useCallback((iso: string) => {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "未知日期";
+    return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  }, []);
+
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  const dateGroups = useMemo(() => {
+    const groups: { [dateStr: string]: number } = {};
+    messages.forEach(m => {
+      const dStr = getMsgLocalDateStr(m.createdAt);
+      groups[dStr] = (groups[dStr] || 0) + 1;
+    });
+    return Object.entries(groups).map(([dateStr, count]) => ({ dateStr, count }));
+  }, [messages, getMsgLocalDateStr]);
+
+  useEffect(() => {
+    setSelectedDate(null);
+  }, [activeSessionId]);
+
   // 生成状态按会话记录：避免在 A 会话生成时切到 B 会话也显示"正在生成"
   const [generatingSessionIds, setGeneratingSessionIds] = useState<ReadonlySet<string>>(() => new Set());
   // 抽屉滑动手势用 ref 而不是 state：手指按住时 touchmove 每帧都在触发，
@@ -475,12 +497,15 @@ export function StoryApp({ onClose }: StoryAppProps) {
 
   const currentPreview = useMemo(() => getStoryPreview(messages), [messages]);
   const visibleMessages = useMemo(() => {
+    if (selectedDate) {
+      return messages.filter(m => getMsgLocalDateStr(m.createdAt) === selectedDate);
+    }
     return messages.slice(-visibleMessageCount);
-  }, [messages, visibleMessageCount]);
-  const hasMoreMessages = visibleMessages.length < messages.length;
+  }, [messages, visibleMessageCount, selectedDate, getMsgLocalDateStr]);
+  const hasMoreMessages = !selectedDate && visibleMessages.length < messages.length;
 
   const loadMoreMessages = useCallback(() => {
-    if (!hasMoreMessages) return;
+    if (selectedDate || !hasMoreMessages) return;
     const node = scrollRef.current;
     if (node) {
       loadMoreRestoreRef.current = {
@@ -489,7 +514,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
       };
     }
     setVisibleMessageCount((count) => Math.min(count + STORY_LOAD_MORE_COUNT, messages.length));
-  }, [hasMoreMessages, messages.length]);
+  }, [hasMoreMessages, messages.length, selectedDate]);
 
   useLayoutEffect(() => {
     const restore = loadMoreRestoreRef.current;
@@ -944,6 +969,57 @@ export function StoryApp({ onClose }: StoryAppProps) {
             ))}
           </div>
         </div>
+
+        {dateGroups.length > 0 && (
+          <div className="story-drawer-section">
+            <div className="story-drawer-eyebrow">日期分页</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "4px 0" }}>
+              <button
+                onClick={() => {
+                  setSelectedDate(null);
+                  setDrawerOpen(false);
+                }}
+                style={{
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "8px 12px",
+                  fontSize: "calc(13px*var(--app-text-scale,1))",
+                  borderRadius: 0,
+                  border: "none",
+                  background: selectedDate === null ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "transparent",
+                  color: "var(--c-story-text, #4b4335)",
+                  fontWeight: selectedDate === null ? 600 : 400,
+                  cursor: "pointer",
+                }}
+              >
+                全部显示 ({messages.length})
+              </button>
+              {dateGroups.map(({ dateStr, count }) => (
+                <button
+                  key={dateStr}
+                  onClick={() => {
+                    setSelectedDate(dateStr);
+                    setDrawerOpen(false);
+                  }}
+                  style={{
+                    width: "100%",
+                    textAlign: "left",
+                    padding: "8px 12px",
+                    fontSize: "calc(13px*var(--app-text-scale,1))",
+                    borderRadius: 0,
+                    border: "none",
+                    background: selectedDate === dateStr ? "var(--c-story-panel-active, rgba(148,163,184,0.12))" : "transparent",
+                    color: "var(--c-story-text, #4b4335)",
+                    fontWeight: selectedDate === dateStr ? 600 : 400,
+                    cursor: "pointer",
+                  }}
+                >
+                  {dateStr} ({count})
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="story-drawer-section">
           <div className="story-drawer-eyebrow">显示选项</div>

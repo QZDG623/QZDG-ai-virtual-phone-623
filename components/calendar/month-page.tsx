@@ -16,6 +16,8 @@ type MonthCell = {
   weekday: number;      // 0 = 周日
   lunarLabel: string;
   lunarFirst: boolean;
+  holiday?: string;
+  isMajorHoliday?: boolean;
 };
 
 type MonthBlock = {
@@ -50,6 +52,8 @@ function buildMonths(todayIso: string): MonthBlock[] {
         weekday: d.getDay(),
         lunarLabel: lunar?.cellLabel ?? "",
         lunarFirst: lunar?.isFirstDay ?? false,
+        holiday: lunar?.holiday,
+        isMajorHoliday: lunar?.isMajorHoliday,
       });
     }
     if (week.length > 0) weeks.push(week);
@@ -165,7 +169,7 @@ export function CalendarMonthPage({
                       onClick={() => onPickDay(cell.iso)}
                     >
                       <span className="calendar-month-num">{cell.day}</span>
-                      <span className={`calendar-month-lunar${cell.lunarFirst ? " is-first" : ""}`}>{cell.lunarLabel}</span>
+                      <span className={`calendar-month-lunar${cell.lunarFirst ? " is-first" : ""}${cell.isMajorHoliday ? " is-holiday" : ""}`} title={cell.holiday}>{cell.lunarLabel}</span>
                       <span className="calendar-month-dots" aria-hidden="true">
                         {cycle ? <i className="calendar-cycle-dot" data-type={cycle.type} /> : null}
                         {items && items.length > 0 ? <i className="calendar-event-dot" data-color={items[0].colorKey} /> : null}

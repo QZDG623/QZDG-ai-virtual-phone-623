@@ -359,7 +359,7 @@ export function CalendarDetailPage({
                   aria-label={`${d.getMonth() + 1}月${d.getDate()}日`}
                 >
                   <span className="calendar-strip-num">{d.getDate()}</span>
-                  <span className="calendar-strip-lunar">{lunar?.cellLabel ?? ""}</span>
+                  <span className={`calendar-strip-lunar${lunar?.isMajorHoliday ? " is-holiday" : ""}`} title={lunar?.holiday}>{lunar?.cellLabel ?? ""}</span>
                   {cycle ? <i className="calendar-cycle-dot calendar-strip-cycle" data-type={cycle.type} aria-hidden="true" /> : null}
                 </button>
               );
