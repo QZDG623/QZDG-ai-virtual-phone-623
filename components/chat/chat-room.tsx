@@ -52,7 +52,7 @@ import { useKeyboardDismissAutoSend } from "@/components/chat/use-keyboard-dismi
 import { cancelBailoutKey } from "@/lib/push-bailout-client";
 import { PENDING_REPLY_PREFIX } from "@/lib/friend-request-engine";
 import type { UserIdentity } from "@/components/settings/user-identity";
-import { AlertCircle, Blocks, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MoreHorizontal, X } from "lucide-react";
+import { AlertCircle, Blocks, BookOpen, Check, Trash2, User, ChevronLeft, ChevronRight, Clapperboard, Clock, Gift, Languages, Loader2, MoreHorizontal, X } from "lucide-react";
 import { setDebugChatState } from "@/lib/debug-store";
 import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import { setChatActive } from "@/lib/music-action-queue";
@@ -818,6 +818,16 @@ const ChatTextInputBar = memo(forwardRef<ChatTextInputHandle, {
 
             <div className="chat-input-actions">
                 <button
+                    onClick={() => {
+                        window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "story" } }));
+                    }}
+                    className="ui-bare-btn text-[var(--c-text)]"
+                    aria-label="跳转到剧情"
+                    title="跳转到剧情"
+                >
+                    <BookOpen size={24} strokeWidth={1.5} />
+                </button>
+                <button
                     onClick={onToggleOfflineMode}
                     className="ui-bare-btn text-[var(--c-text)] chat-offline-toggle"
                     aria-label="线下模式"
@@ -1028,6 +1038,17 @@ const OfflineTextInputBar = memo(forwardRef<OfflineTextInputHandle, {
                 placeholder={isSpectator ? "围观中，点右侧按钮推进他们的线下互动" : undefined}
             />
             <div className="chat-input-actions">
+                <button
+                    type="button"
+                    onClick={() => {
+                        window.dispatchEvent(new CustomEvent("open-app", { detail: { appId: "story" } }));
+                    }}
+                    className="ui-bare-btn text-[var(--c-text)]"
+                    aria-label="跳转到剧情"
+                    title="跳转到剧情"
+                >
+                    <BookOpen size={24} strokeWidth={1.5} />
+                </button>
                 <button
                     type="button"
                     onClick={onToggleOfflineMode}
