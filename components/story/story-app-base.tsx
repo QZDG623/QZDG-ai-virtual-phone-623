@@ -1011,6 +1011,13 @@ export function StoryApp({ onClose }: StoryAppProps) {
                   onClick={() => {
                     setSelectedDate(dateStr);
                     setDrawerOpen(false);
+                    // 滚动重置到被点击日期聊天的第一句话
+                    requestAnimationFrame(() => {
+                      const node = scrollRef.current;
+                      if (node) {
+                        node.scrollTop = 0;
+                      }
+                    });
                   }}
                   style={{
                     width: "100%",
