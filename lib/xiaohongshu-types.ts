@@ -45,6 +45,7 @@ export type XiaohongshuNote = {
   recentSaveNames: string[];
   comments: XiaohongshuComment[];
   imageAssetId?: string;
+  imageAssetIds?: string[];
   imageDescription?: string;
   imageWidth?: number;
   imageHeight?: number;
@@ -115,6 +116,7 @@ export type XiaohongshuUserPostInput = {
   body: string;
   tags: string[];
   image?: XiaohongshuDraftImage;
+  images?: XiaohongshuDraftImage[];
 };
 
 export type XiaohongshuUserInteractions = {
