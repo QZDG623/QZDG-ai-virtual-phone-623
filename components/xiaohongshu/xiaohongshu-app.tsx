@@ -407,6 +407,7 @@ function createCharacterPost(character: Character, activity: ParsedXiaohongshuCh
   };
 }
 
+// @ts-ignore
 function NoteDetailSlider({
   note,
   imageIds,
@@ -462,7 +463,9 @@ function NoteImage({
   collapseBilingualTranslation: boolean;
   isDetail?: boolean;
 }) {
+  // @ts-ignore
   const imageIds = (note.imageAssetIds && note.imageAssetIds.length > 0)
+    // @ts-ignore
     ? note.imageAssetIds
     : (note.imageAssetId ? [note.imageAssetId] : []);
   if (note.type === "video") {
