@@ -858,8 +858,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const selectedMessagePanelLabel = messagePanel === "engagement" ? "点赞和收藏" : messagePanel === "follow" ? "新增关注" : messagePanel === "comment" ? "评论" : "";
   const selectedMessagePanelTitle = messagePanel === "engagement" ? "收到的赞和收藏" : selectedMessagePanelLabel;
   const isMessageSubpage = selectedTab === "messages" && (Boolean(messagePanel) || Boolean(selectedDmThread));
-  const selectedAuthorAccount = selectedNote ? makeAccountFromNote(selectedNote) : null;
-  const selectedAuthorFollowing = isFollowingAccount(selectedAuthorAccount);
+  const selectedAuthorAccount = useMemo(() => selectedNote ? makeAccountFromNote(selectedNote) : null, [selectedNote, state.customNpcAvatars, characterAvatarMap]);
+  const selectedAuthorFollowing = useMemo(() => isFollowingAccount(selectedAuthorAccount), [selectedAuthorAccount, state.socialGraph.following]);
 
   useEffect(() => {
     const isBusy = busy !== "idle";
@@ -877,7 +877,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const videoNotes = useMemo(() => state.notes.filter(note => note.type === "video" && !hiddenFeedNoteIds.has(note.id)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [hiddenFeedNoteIds, state.notes]);
   const activeHomeNotes = homeFeedTab === "follow" ? followedNotes : homeFeedTab === "video" ? videoNotes : discoverNotes;
   const activeVideoNoteIndex = useMemo(() => videoNotes.findIndex(note => note.id === selectedNoteId), [selectedNoteId, videoNotes]);
-  const activeVideoCaption = selectedNote?.type === "video" ? selectedNote.body : "";
+  const activeVideoCaption = useMemo(() => selectedNote?.type === "video" ? selectedNote.body : "", [selectedNote]);
   const myNotes = useMemo(() => state.notes.filter(note => note.source === "user").sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [state.notes]);
   const profileNotes = useMemo(() => {
     if (profileTab === "notes") return myNotes;
@@ -996,7 +996,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     return pickDefaultAvatar(`npc:${authorName || authorId || seed}`);
   }
 
-  function getNoteAvatar(note: XiaohongshuNote): string {
+  function getNoteAvatar(note: XiaohongshuNote | null | undefined): string {
+    if (!note) return userAvatar;
     return resolveAuthorAvatar(note.source, note.authorId, note.authorName, note.id);
   }
 
@@ -1282,8 +1283,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     };
   }
 
-  function makeAccountFromNote(note: XiaohongshuNote): XiaohongshuAccount | null {
-    if (note.source === "user") return null;
+  function makeAccountFromNote(note: XiaohongshuNote | null | undefined): XiaohongshuAccount | null {
+    if (!note || note.source === "user") return null;
     const id = note.authorId || (note.source === "npc" ? makeXiaohongshuNpcId(note.authorName) : note.source);
     return {
       type: note.source,
