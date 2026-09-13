@@ -78,6 +78,11 @@ export type XiaohongshuSettings = {
   npcDmReplyPrompt: string;
   participantCharacterIds: string[];
   sendToCharacterProbability: number;
+  customThemes?: string[];
+  activeThemes?: string[];
+  generateCount?: number;
+  generateImages?: boolean;
+  imageGenCharacterIds?: string[];
 };
 
 export type XiaohongshuNotificationType = "like" | "save" | "comment" | "dm" | "follow";
@@ -140,6 +145,7 @@ export type XiaohongshuState = {
   userInteractions: XiaohongshuUserInteractions;
   socialGraph: XiaohongshuSocialGraph;
   updatedAt: string;
+  customNpcAvatars?: Record<string, string>;
 };
 
 export type ParsedXiaohongshuNpcFeed = {
@@ -419,4 +425,9 @@ export const DEFAULT_XIAOHONGSHU_SETTINGS: XiaohongshuSettings = {
   npcDmReplyPrompt: DEFAULT_XIAOHONGSHU_NPC_DM_REPLY_PROMPT,
   participantCharacterIds: [],
   sendToCharacterProbability: 60,
+  customThemes: ["日常吐槽", "美食分享", "日常穿搭OOTD", "旅行日记", "好物种草"],
+  activeThemes: ["日常吐槽"],
+  generateCount: 3,
+  generateImages: false,
+  imageGenCharacterIds: [],
 };

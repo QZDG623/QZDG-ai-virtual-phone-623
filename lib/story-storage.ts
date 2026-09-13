@@ -41,15 +41,33 @@ export type StoryProjectionEntry = {
   content: string;
 };
 
+export type StoryFavorite = {
+  id: string;
+  characterId: string;
+  characterName: string;
+  annotation: string; // 标注名称
+  messageId: string;
+  role: string;
+  rawContent: string;
+  renderedContent?: string;
+  createdAt: string; // 收藏时间
+};
+
 class StoryDatabase extends Dexie {
   sessions!: Dexie.Table<StorySession, string>;
   messages!: Dexie.Table<StoryMessage, string>;
+  favorites!: Dexie.Table<StoryFavorite, string>;
 
   constructor() {
     super("AiPhoneStoryDB");
     this.version(1).stores({
       sessions: "id, characterId, updatedAt",
       messages: "id, sessionId, createdAt",
+    });
+    this.version(2).stores({
+      sessions: "id, characterId, updatedAt",
+      messages: "id, sessionId, createdAt",
+      favorites: "id, characterId, createdAt",
     });
   }
 }
@@ -285,4 +303,34 @@ export function loadStoryProjectionEntries(
   }
 
   return projections;
+}
+
+export async function loadStoryFavorites(characterId?: string): Promise<StoryFavorite[]> {
+  if (typeof window === "undefined") return [];
+  try {
+    if (characterId) {
+      return await storyDb.favorites.where("characterId").equals(characterId).toArray();
+    }
+    return await storyDb.favorites.toArray();
+  } catch {
+    return [];
+  }
+}
+
+export async function saveStoryFavorite(favorite: StoryFavorite): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    await storyDb.favorites.put(favorite);
+  } catch (err) {
+    console.warn("[StoryDB] failed to save favorite:", err);
+  }
+}
+
+export async function deleteStoryFavorite(id: string): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    await storyDb.favorites.delete(id);
+  } catch (err) {
+    console.warn("[StoryDB] failed to delete favorite:", err);
+  }
 }

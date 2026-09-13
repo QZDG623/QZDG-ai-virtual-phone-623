@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Brain, MoreHorizontal, Sparkles } from "lucide-react";
+import { Brain, Bookmark, MoreHorizontal, Sparkles, Trash2 } from "lucide-react";
 import { MemoryBankPage } from "./memory/memory-bank-page";
 import { VnAssetPage } from "./vn/vn-asset-page";
 import { loadCharacters } from "@/lib/character-storage";
 import { PageShell } from "./ui/page-shell";
 import { FeaturedCard, type FeaturedCardItem } from "./ui/card-grid";
 import { BINDING_ACCENTS, CONTENT_APP_ACCENTS } from "@/lib/ui-accent-colors";
+import { loadStoryFavorites, deleteStoryFavorite, type StoryFavorite } from "@/lib/story-storage";
 
-export type ResourceSubPage = "main" | "memory" | "vn_assets";
+export type ResourceSubPage = "main" | "memory" | "vn_assets" | "story_favorites";
 type MemoryView = "list" | "detail" | "settings";
 
 const RESOURCE_MENU: Omit<FeaturedCardItem, "onClick">[] = [
@@ -28,6 +29,14 @@ const RESOURCE_MENU: Omit<FeaturedCardItem, "onClick">[] = [
         desc: "场景与角色立绘",
         iconColor: CONTENT_APP_ACCENTS.vn,
         glassIcon: "vn-assets",
+    },
+    {
+        id: "story_favorites",
+        icon: Bookmark,
+        label: "剧情收藏",
+        desc: "已收藏的剧情对话片段",
+        iconColor: "#ec4899",
+        glassIcon: "story-favorites",
     },
 ];
 
@@ -77,7 +86,8 @@ export function PhoneResourcesApp({ onClose, onNotice, initialPage }: { onClose:
                 : memoryView === "detail" ? (memoryCharName || "记忆详情")
                     : "记忆库")
             : currentPage === "vn_assets" ? "漫卷资源"
-                : "资源库";
+                : currentPage === "story_favorites" ? "剧情收藏"
+                    : "资源库";
 
     const showSettingsIcon = currentPage === "memory" && memoryView !== "settings";
 
@@ -113,7 +123,7 @@ export function PhoneResourcesApp({ onClose, onNotice, initialPage }: { onClose:
                                         key={item.id}
                                         item={{
                                             ...item,
-                                            onClick: () => setCurrentPage(item.id === "vn_assets" ? "vn_assets" : "memory"),
+                                            onClick: () => setCurrentPage(item.id as ResourceSubPage),
                                         }}
                                     />
                                 ))}

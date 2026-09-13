@@ -1761,6 +1761,77 @@ export function applyCharacterCommentReply(note: XiaohongshuNote, character: Cha
  * - 如果 thread 存在，把延伸评论按楼中楼关系挂在主评论下
  * - 返回新增的所有评论（主评论 + thread 评论）供调用方记录记忆/通知
  */
+export async function generateThematicNotes(args: {
+  settings: XiaohongshuSettings;
+  themes: string[];
+  count: number;
+  participantCharacters: Character[];
+}): Promise<XiaohongshuNote[]> {
+  const apiConfig = resolveGlobalApiConfig();
+  if (!apiConfig) throw new ChatEngineError("未配置全局默认 API。");
+
+  const participantNames = args.participantCharacters.map(c => c.name);
+  const prompt = [
+    "你正在根据指定的主题生成一批小红书笔记。",
+    `【生成主题】: ${args.themes.join("、") || "日常"}`,
+    `【生成数量】: ${args.count} 篇`,
+    `【可选作者】: 随机路人NPC，或以下参与角色：${participantNames.join("、") || "无"}`,
+    "【活人感要求】:",
+    "- 笔记以碎片化、去精致化的日常分享为主，标题正文口语化、可用网络黑话/表情/不完整句，不煽情、不装逼；多种形式并存（吐槽、疑问、求助、种草、踩雷、碎碎念等）。",
+    "- 如果作者是参与角色，请结合该角色的性格语气特征进行发言，符合其人设。",
+    "- 绝对禁止讲大道理、爹味说教、强行把日常上升高度，内容落于实际、轻松幽默。",
+    "【输出格式】:",
+    "请为每篇生成的笔记输出以下块格式：",
+    "",
+    "#笔记1",
+    "[作者] 昵称 (如果是上述参与角色之一，请必须完全一致地填写其名字；如果是路人，请自创一个普通NPC名字)",
+    "[作者类型] \"npc\" 或 \"character\" (如果是上述参与角色，填 character；如果是路人，填 npc)",
+    "[标题] 标题",
+    "[正文] 笔记正文",
+    "[图片描述] 详细的画面描述，用于AI绘图（请用英文或详细的中文描述，适合作为生图 Prompt）",
+    "[标签] 标签1、标签2",
+    "[点赞] 数字",
+    "[收藏] 数字",
+    "[评论数] 数字",
+    "[评论1作者] 昵称",
+    "[评论1内容] 评论内容",
+    "[评论2作者] 昵称",
+    "[评论2回复对象] 评论1",
+    "[评论2内容] 回复评论1的楼中楼内容",
+  ].join("\n");
+
+  const raw = await sendLLMRequest(
+    apiConfig,
+    null,
+    [{ role: "user", content: prompt, _debugMeta: { marker: "xiaohongshu_thematic_feed" } }],
+    [],
+    { characterName: "小红书主题生成" },
+    { appId: "xiaohongshu", appTags: ["xiaohongshu", "thematic_feed"], skipOutputRegex: true },
+  );
+
+  const blocks = parseBlocks(raw);
+  const notes: XiaohongshuNote[] = [];
+  blocks.forEach((block, index) => {
+    const authorName = cleanText(block.fields["作者"], 60) || "小红书用户";
+    const authorTypeRaw = cleanText(block.fields["作者类型"], 20).toLowerCase();
+    const isCharacter = authorTypeRaw === "character" || args.participantCharacters.some(c => c.name === authorName);
+    const matchedChar = args.participantCharacters.find(c => c.name === authorName);
+    
+    const source = isCharacter ? "character" : "npc";
+    const authorId = isCharacter && matchedChar ? matchedChar.id : makeXiaohongshuNpcId(authorName);
+    const finalAuthorName = isCharacter && matchedChar ? resolveCharacterXiaohongshuDisplayName(matchedChar) : authorName;
+
+    const note = parseNoteBlock(block, "post", index, source, authorId);
+    if (note) {
+      note.authorName = finalAuthorName;
+      note.imageDescription = cleanMultiline(block.fields["图片描述"] ?? block.fields["配图描述"], 500) || undefined;
+      notes.push(note);
+    }
+  });
+
+  return notes;
+}
+
 export function applyCharacterActivityComment(args: {
   note: XiaohongshuNote;
   character: Character;

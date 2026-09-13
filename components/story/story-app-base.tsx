@@ -59,6 +59,8 @@ import {
   type StoryMessage,
   type StorySession,
   updateStorySession,
+  saveStoryFavorite,
+  type StoryFavorite,
 } from "@/lib/story-storage";
 import { SessionCustomCSS } from "@/components/ui/session-custom-css";
 import { STORY_CSS_EXAMPLE } from "@/lib/css-examples";
@@ -282,6 +284,8 @@ export function StoryApp({ onClose }: StoryAppProps) {
   const [customCssDraft, setCustomCssDraft] = useState("");
   const [foldTagsDraft, setFoldTagsDraft] = useState("");
   const [contextExcludedTagsDraft, setContextExcludedTagsDraft] = useState("");
+  const [favoritingMessage, setFavoritingMessage] = useState<StoryMessage | null>(null);
+  const [favoriteAnnotation, setFavoriteAnnotation] = useState("");
 
   const getMsgLocalDateStr = useCallback((iso: string) => {
     const d = new Date(iso);
@@ -833,6 +837,37 @@ export function StoryApp({ onClose }: StoryAppProps) {
     setEditingContent("");
     setStorageVersion(v => v + 1);
   }
+  const handleFavoriteStart = (msg: StoryMessage) => {
+    setFavoritingMessage(msg);
+    const fallbackText = msg.rawContent.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 20);
+    setFavoriteAnnotation(fallbackText || "剧情片段");
+    setActiveMessageId(null);
+  };
+
+  const handleFavoriteSave = async () => {
+    if (!favoritingMessage) return;
+    const anno = favoriteAnnotation.trim();
+    if (!anno) {
+      alert("请输入标注名称");
+      return;
+    }
+    const favorite: StoryFavorite = {
+      id: `story_fav_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      characterId: activeCharacterId,
+      characterName: currentCharacter?.name ?? "未知角色",
+      annotation: anno,
+      messageId: favoritingMessage.id,
+      role: favoritingMessage.role,
+      rawContent: favoritingMessage.rawContent,
+      renderedContent: favoritingMessage.renderedContent,
+      createdAt: new Date().toISOString(),
+    };
+    await saveStoryFavorite(favorite);
+    setFavoritingMessage(null);
+    setFavoriteAnnotation("");
+    alert("收藏成功，已保存至资源库");
+  };
+
   function handleStoryCopy(text: string) {
     const fallbackCopy = () => {
       const ta = document.createElement("textarea");
@@ -1281,6 +1316,7 @@ export function StoryApp({ onClose }: StoryAppProps) {
                               <div style={{ display: "flex" }}>
                                 <button onClick={() => handleStoryDelete(message.id)} className="story-ctx-btn story-ctx-btn-danger">删除</button>
                                 <button onClick={() => handleStoryDeleteFrom(message.id)} className="story-ctx-btn story-ctx-btn-danger">删除以下</button>
+                                <button onClick={() => handleFavoriteStart(message)} className="story-ctx-btn">收藏</button>
                               </div>
                               <div className="story-ctx-triangle" />
                             </div>
@@ -1310,6 +1346,82 @@ export function StoryApp({ onClose }: StoryAppProps) {
         onSend={(text) => { void handleSend(text); }}
         onStop={handleStopGeneration}
       />
+
+      {/* Favorite Annotation Dialog */}
+      {favoritingMessage && (
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 350,
+          background: "rgba(0, 0, 0, 0.4)",
+          backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 20,
+        }}>
+          <div style={{
+            background: "var(--c-story-bg-top, #fdfdfd)",
+            width: "100%", maxWidth: 340,
+            borderRadius: 12,
+            boxShadow: "var(--story-paper-shadow)",
+            padding: 20,
+            display: "flex", flexDirection: "column", gap: 14,
+          }}>
+            <h4 style={{ fontSize: "calc(15px*var(--app-text-scale,1))", fontWeight: 600, color: "var(--c-story-heading, #1e293b)", margin: 0 }}>
+              收藏剧情片段
+            </h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <label style={{ fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-story-sub, #94a3b8)" }}>
+                请编辑标注名称
+              </label>
+              <input
+                type="text"
+                value={favoriteAnnotation}
+                onChange={(e) => setFavoriteAnnotation(e.target.value)}
+                placeholder="例如：初次相遇、重要的约定"
+                style={{
+                  width: "100%", boxSizing: "border-box",
+                  padding: "10px 12px", borderRadius: 8,
+                  border: "1px solid var(--c-story-drawer-border, rgba(0,0,0,0.08))",
+                  background: "var(--c-story-css-box-bg, rgba(255, 251, 246, 0.88))",
+                  color: "var(--c-story-text, #4b4335)",
+                  fontSize: "calc(13px*var(--app-text-scale,1))", outline: "none",
+                }}
+                autoFocus
+              />
+            </div>
+            <div style={{
+              fontSize: "calc(12px*var(--app-text-scale,1))", color: "var(--c-story-sub, #94a3b8)",
+              maxHeight: 80, overflow: "hidden", textOverflow: "ellipsis",
+              borderLeft: "2px solid var(--c-story-sub, #94a3b8)", paddingLeft: 8,
+              opacity: 0.8, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical"
+            }}>
+              {favoritingMessage.rawContent.replace(/<[^>]+>/g, " ")}
+            </div>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 6 }}>
+              <button
+                onClick={() => setFavoritingMessage(null)}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "none",
+                  background: "var(--c-story-panel, rgba(0,0,0,0.05))",
+                  color: "var(--c-story-text, #3a3b3c)",
+                  fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 500, cursor: "pointer",
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleFavoriteSave}
+                style={{
+                  padding: "8px 16px", borderRadius: 8, border: "none",
+                  background: "var(--c-story-send-bg-active, #dbe3ea)",
+                  color: "var(--c-story-send-color-active, #475569)",
+                  fontSize: "calc(12px*var(--app-text-scale,1))", fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                确认收藏
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CSS Style Modal */}
       {cssModalOpen && (

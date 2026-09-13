@@ -165,6 +165,11 @@ export function normalizeXiaohongshuSettings(raw: unknown): XiaohongshuSettings 
     npcDmReplyPrompt: cleanMultiline(record.npcDmReplyPrompt, 8000) || DEFAULT_XIAOHONGSHU_SETTINGS.npcDmReplyPrompt,
     participantCharacterIds: Array.from(new Set(participantCharacterIds)),
     sendToCharacterProbability: Math.max(0, Math.min(100, probability)),
+    customThemes: Array.isArray(record.customThemes) ? record.customThemes.map(t => cleanText(t, 60)).filter(Boolean) : DEFAULT_XIAOHONGSHU_SETTINGS.customThemes,
+    activeThemes: Array.isArray(record.activeThemes) ? record.activeThemes.map(t => cleanText(t, 60)).filter(Boolean) : DEFAULT_XIAOHONGSHU_SETTINGS.activeThemes,
+    generateCount: numberOr(record.generateCount, DEFAULT_XIAOHONGSHU_SETTINGS.generateCount ?? 3),
+    generateImages: record.generateImages === true,
+    imageGenCharacterIds: Array.isArray(record.imageGenCharacterIds) ? record.imageGenCharacterIds.map(id => cleanText(id, 120)).filter(Boolean) : DEFAULT_XIAOHONGSHU_SETTINGS.imageGenCharacterIds,
   };
 }
 
@@ -328,6 +333,7 @@ export function createDefaultXiaohongshuState(): XiaohongshuState {
     userInteractions: normalizeXiaohongshuUserInteractions(null),
     socialGraph: normalizeXiaohongshuSocialGraph(null),
     updatedAt: new Date().toISOString(),
+    customNpcAvatars: {},
   };
 }
 
@@ -367,6 +373,7 @@ export function loadXiaohongshuState(): XiaohongshuState {
       userInteractions,
       socialGraph: normalizeXiaohongshuSocialGraph(parsed.socialGraph ?? parsed.social_graph),
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
+      customNpcAvatars: typeof parsed.customNpcAvatars === "object" && parsed.customNpcAvatars !== null ? parsed.customNpcAvatars as Record<string, string> : {},
     };
   } catch {
     return createDefaultXiaohongshuState();

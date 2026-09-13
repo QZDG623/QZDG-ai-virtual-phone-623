@@ -53,7 +53,9 @@ import {
   generateXiaohongshuNpcReplyToUserComment,
   generateXiaohongshuNpcReactionForUserPost,
   XiaohongshuGenerationError,
+  generateThematicNotes,
 } from "@/lib/xiaohongshu-engine";
+import { generateImageFromConfiguredApi } from "@/lib/image-generation-service";
 import {
   createUserXiaohongshuNote,
   loadXiaohongshuState,
@@ -501,7 +503,16 @@ function NoteCard({
           />
         </p>
         <div className="cp-xhs-note-foot">
-          <div className="cp-xhs-note-author">
+          <div className="cp-xhs-note-author" onClick={(e) => {
+            e.stopPropagation();
+            const account = makeAccountFromNote(note);
+            if (account) {
+              setViewingProfileAccount({
+                ...account,
+                avatar: avatarSrc
+              });
+            }
+          }}>
             <XhsAvatar className="cp-xhs-note-author-avatar" src={avatarSrc} name={note.authorName} />
             <span>{note.authorName}</span>
           </div>
@@ -618,9 +629,31 @@ function CommentList({
         const depth = parentComment || (!comment.replyToCommentId && comment.replyTo) ? 1 : 0;
         return (
           <div key={comment.id} className={`cp-xhs-comment-card cp-xhs-comment-card--depth-${depth}`}>
-            <XhsAvatar className="cp-xhs-comment-avatar" src={getAvatar(comment)} name={comment.authorName} />
+            <div className="cursor-pointer" onClick={() => {
+              if (comment.authorType !== "user") {
+                setViewingProfileAccount({
+                  type: comment.authorType,
+                  id: comment.authorId,
+                  name: comment.authorName,
+                  avatar: getAvatar(comment),
+                  followedAt: new Date().toISOString()
+                });
+              }
+            }}>
+              <XhsAvatar className="cp-xhs-comment-avatar" src={getAvatar(comment)} name={comment.authorName} />
+            </div>
             <div className="cp-xhs-comment-content">
-              <strong>
+              <strong className="cursor-pointer" onClick={() => {
+                if (comment.authorType !== "user") {
+                  setViewingProfileAccount({
+                    type: comment.authorType,
+                    id: comment.authorId,
+                    name: comment.authorName,
+                    avatar: getAvatar(comment),
+                    followedAt: new Date().toISOString()
+                  });
+                }
+              }}>
                 {comment.authorName}
                 {targetName ? <><span className="cp-xhs-comment-reply-label">回复</span>{targetName}</> : null}
               </strong>
@@ -672,6 +705,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const [characters, setCharacters] = useState<Character[]>([]);
   const [selectedTab, setSelectedTab] = useState<XiaohongshuTabId>("home");
   const [homeFeedTab, setHomeFeedTab] = useState<XiaohongshuHomeFeedTab>("discover");
+  const [viewingProfileAccount, setViewingProfileAccount] = useState<XiaohongshuAccount | null>(null);
+  const [newThemeInput, setNewThemeInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -830,6 +865,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const userIdentity = useMemo(() => resolveUserIdentity(undefined, "xiaohongshu") ?? resolveUserIdentity(), []);
   const userAvatar = userIdentity?.avatarUrl || pickDefaultAvatar(`user:${userIdentity?.id || state.profile.nickname}`);
   const profileCoverImage = state.profile.coverImageAssetId ? imageMap[state.profile.coverImageAssetId] : "";
+  const npcAvatarFileRef = useRef<HTMLInputElement | null>(null);
   const profileCoverStyle: CSSProperties | undefined = profileCoverImage
     ? { backgroundImage: `linear-gradient(180deg, rgba(0,0,0,0.34), rgba(0,0,0,0.54)), url(${profileCoverImage})` }
     : undefined;
@@ -895,6 +931,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   function resolveAuthorAvatar(source: XiaohongshuAuthorType, authorId: string, authorName: string, seed: string): string {
     if (source === "user") return userAvatar;
     if (source === "character") return characterAvatarMap.get(authorId) || pickDefaultAvatar(`character:${authorId || authorName}`);
+    const customAvatar = state.customNpcAvatars?.[authorId] || state.customNpcAvatars?.[authorName];
+    if (customAvatar) return customAvatar;
     return pickDefaultAvatar(`npc:${authorName || authorId || seed}`);
   }
 
@@ -904,6 +942,45 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
   function getCommentAvatar(comment: XiaohongshuComment): string {
     return resolveAuthorAvatar(comment.authorType, comment.authorId, comment.authorName, comment.id);
+  }
+
+  async function handleNpcAvatarChange(event: ChangeEvent<HTMLInputElement>, npcKey: string) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 200;
+      canvas.height = 200;
+      const context = canvas.getContext("2d");
+      if (!context) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
+      context.drawImage(image, 0, 0, 200, 200);
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(objectUrl);
+        if (!blob) return;
+        saveChatImageToIndexedDB(blob).then((assetId) => {
+          const preview = URL.createObjectURL(blob);
+          setImageMap(prev => ({ ...prev, [assetId]: preview }));
+          setState((current) => {
+            const customNpcAvatars = { ...(current.customNpcAvatars || {}), [npcKey]: preview };
+            return saveXiaohongshuState({
+              ...current,
+              customNpcAvatars,
+            });
+          });
+          if (viewingProfileAccount && (viewingProfileAccount.id === npcKey || viewingProfileAccount.name === npcKey)) {
+            setViewingProfileAccount(prev => prev ? { ...prev, avatar: preview } : null);
+          }
+          onNotice?.("头像修改成功");
+        });
+      }, "image/jpeg", 0.85);
+    };
+    image.src = objectUrl;
   }
 
   function getNotificationAvatar(actorName: string, seed: string): string {
@@ -1147,10 +1224,12 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
   function makeAccountFromNote(note: XiaohongshuNote): XiaohongshuAccount | null {
     if (note.source === "user") return null;
+    const id = note.authorId || (note.source === "npc" ? makeXiaohongshuNpcId(note.authorName) : note.source);
     return {
       type: note.source,
-      id: note.authorId || (note.source === "npc" ? makeXiaohongshuNpcId(note.authorName) : note.source),
+      id,
       name: note.authorName,
+      avatar: note.source === "character" ? characterAvatarMap.get(note.authorId) : (state.customNpcAvatars?.[id] || state.customNpcAvatars?.[note.authorName]),
       followedAt: new Date().toISOString(),
     };
   }
@@ -1411,6 +1490,68 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       throw firstError instanceof Error ? firstError : new Error(String(firstError));
     }
     return current;
+  }
+
+  async function handleGenerateThematicContent() {
+    if (busy !== "idle") return;
+    clearErrorState();
+    const activeSettings = state.settings;
+    const activeThemes = activeSettings.activeThemes || [];
+    if (activeThemes.length === 0) {
+      onNotice?.("请先在设置中选择要生成的主题");
+      return;
+    }
+    const generateCount = activeSettings.generateCount || 3;
+    const generateImages = activeSettings.generateImages === true;
+    const imageGenCharacterIds = activeSettings.imageGenCharacterIds || [];
+
+    setBusy("npc-feed");
+    try {
+      const thematicNotes = await generateThematicNotes({
+        settings: activeSettings,
+        themes: activeThemes,
+        count: generateCount,
+        participantCharacters: characters.filter(c => activeSettings.participantCharacterIds.includes(c.id)),
+      });
+
+      const updatedNotes = [...thematicNotes];
+      if (generateImages) {
+        setBusy("character-activity");
+        for (let i = 0; i < updatedNotes.length; i++) {
+          const note = updatedNotes[i];
+          const isTargetCharacter = note.source === "character" && imageGenCharacterIds.includes(note.authorId);
+          if (isTargetCharacter && note.imageDescription) {
+            onNotice?.(`正在为 ${note.authorName} 的帖子生成配图...`);
+            try {
+              const imgResult = await generateImageFromConfiguredApi({
+                description: note.imageDescription,
+                characterId: note.authorId,
+              });
+              if (imgResult) {
+                const assetId = await saveChatImageToIndexedDB(imgResult.blob);
+                note.imageAssetId = assetId;
+                setImageMap(prev => ({ ...prev, [assetId]: imgResult.dataUrl }));
+              }
+            } catch (err) {
+              console.error("生成图片失败:", err);
+              onNotice?.(`为 ${note.authorName} 生成图片失败: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+        }
+      }
+
+      setState((current) => {
+        return saveXiaohongshuState({
+          ...current,
+          notes: [...updatedNotes, ...current.notes],
+        });
+      });
+      onNotice?.("主题帖子生成成功");
+    } catch (err) {
+      handleGenerationError(err, "暂时无法按照主题生成帖子。");
+    } finally {
+      setBusy("idle");
+    }
   }
 
   async function handleGenerateHomeContent() {
@@ -1684,9 +1825,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     });
   }
 
-  function handleToggleFollowAuthor(note: XiaohongshuNote) {
-    const account = makeAccountFromNote(note);
-    if (!account) return;
+  function handleToggleFollowAccount(account: XiaohongshuAccount) {
     setState((current) => {
       const key = accountKey(account);
       const following = current.socialGraph.following;
@@ -1706,6 +1845,37 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
         },
       });
     });
+  }
+
+  function handleToggleFollowAuthor(note: XiaohongshuNote) {
+    const account = makeAccountFromNote(note);
+    if (!account) return;
+    handleToggleFollowAccount(account);
+  }
+
+  function handleStartDm(account: XiaohongshuAccount) {
+    const threadId = account.type === "character" ? `dm:char:${account.id}` : `dm:${account.name}`;
+    const existing = state.notifications.some(n => n.threadId === threadId);
+    if (!existing) {
+      const initNotice = makeXiaohongshuNotification({
+        type: "dm",
+        actorName: account.name,
+        text: "你好呀！",
+        thumbnailText: "私信",
+        direction: "incoming",
+        threadId,
+        threadName: account.name,
+        unread: false,
+      });
+      setState(current => saveXiaohongshuState({
+        ...current,
+        notifications: [initNotice, ...current.notifications]
+      }));
+    }
+    setSelectedTab("messages");
+    setSelectedDmThreadId(threadId);
+    setViewingProfileAccount(null);
+    setSelectedNoteId(null);
   }
 
   function handleVoteComment(comment: XiaohongshuComment, vote: "like" | "dislike") {
@@ -2263,8 +2433,18 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
 
           <section className="cp-xhs-video-meta">
             <div className="cp-xhs-video-author-row">
-              <XhsAvatar className="cp-xhs-video-author-avatar" src={getNoteAvatar(note)} name={note.authorName} />
-              <strong>{note.authorName}</strong>
+              <div className="flex items-center gap-2 cursor-pointer" onClick={() => {
+                const account = makeAccountFromNote(note);
+                if (account) {
+                  setViewingProfileAccount({
+                    ...account,
+                    avatar: getNoteAvatar(note)
+                  });
+                }
+              }}>
+                <XhsAvatar className="cp-xhs-video-author-avatar" src={getNoteAvatar(note)} name={note.authorName} />
+                <strong>{note.authorName}</strong>
+              </div>
               {account ? (
                 <button
                   type="button"
@@ -2673,7 +2853,15 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               <button type="button" className="cp-xhs-detail-back" onClick={() => setSelectedNoteId(null)} aria-label="返回">
                 <ChevronLeft size={24} strokeWidth={2.1} />
               </button>
-              <div className="cp-xhs-detail-author-info">
+              <div className="cp-xhs-detail-author-info cursor-pointer" onClick={() => {
+                const account = makeAccountFromNote(selectedNote);
+                if (account) {
+                  setViewingProfileAccount({
+                    ...account,
+                    avatar: getNoteAvatar(selectedNote)
+                  });
+                }
+              }}>
                 <XhsAvatar className="cp-xhs-detail-avatar" src={getNoteAvatar(selectedNote)} name={selectedNote.authorName} />
                 <span className="cp-xhs-detail-name">{selectedNote.authorName}</span>
               </div>
@@ -2902,7 +3090,96 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
             )
           ) : null}
 
-          {selectedTab === "profile" ? (
+          {viewingProfileAccount ? (
+            <section className="cp-xhs-profile xhs-profile">
+              <div className="cp-xhs-profile-topbar is-visible">
+                <button type="button" onClick={() => setViewingProfileAccount(null)} aria-label="返回">
+                  <ChevronLeft size={24} strokeWidth={2.4} />
+                </button>
+                <div className="cp-xhs-profile-topbar-title">{viewingProfileAccount.name}</div>
+                <div></div>
+              </div>
+              <div className="cp-xhs-profile-hero">
+                <div className="cp-xhs-profile-cover" />
+                <div className="cp-xhs-profile-main">
+                  <div className="cp-xhs-profile-avatar-wrap relative group">
+                    <XhsAvatar className="cp-xhs-profile-avatar" src={viewingProfileAccount.avatar} name={viewingProfileAccount.name} />
+                    {viewingProfileAccount.type === "npc" && (
+                      <button
+                        type="button"
+                        className="absolute inset-0 bg-black/40 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                        onClick={() => npcAvatarFileRef.current?.click()}
+                      >
+                        换头像
+                      </button>
+                    )}
+                  </div>
+                  {viewingProfileAccount.type === "npc" && (
+                    <input
+                      ref={npcAvatarFileRef}
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => handleNpcAvatarChange(e, viewingProfileAccount.id)}
+                    />
+                  )}
+                  <div className="cp-xhs-profile-meta">
+                    <h3>{viewingProfileAccount.name}</h3>
+                    <span>小红书号：{viewingProfileAccount.id.slice(-8)}</span>
+                    <span>IP 属地：{viewingProfileAccount.type === "character" ? "上海" : "未知"}</span>
+                  </div>
+                </div>
+                <div className="cp-xhs-profile-bio">
+                  <p>{viewingProfileAccount.type === "character" ? "我是 AI 虚拟手机驻场角色" : "小红书冲浪达人"}</p>
+                </div>
+                <div className="cp-xhs-profile-actions">
+                  <div className="cp-xhs-profile-stats">
+                    <div><strong>{formatCount(viewingProfileAccount.type === "character" ? 28 : 12)}</strong><span>关注</span></div>
+                    <div><strong>{formatCount(viewingProfileAccount.type === "character" ? 8848 : 233)}</strong><span>粉丝</span></div>
+                    <div><strong>{formatCount(viewingProfileAccount.type === "character" ? 52000 : 1200)}</strong><span>获赞与收藏</span></div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`cp-xhs-profile-edit ${isFollowingAccount(viewingProfileAccount) ? "is-following" : ""}`}
+                    onClick={() => handleToggleFollowAccount(viewingProfileAccount)}
+                  >
+                    {isFollowingAccount(viewingProfileAccount) ? "已关注" : "关注"}
+                  </button>
+                  <button
+                    type="button"
+                    className="cp-xhs-profile-edit"
+                    style={{ marginLeft: 8, backgroundColor: "#ff2442", color: "white" }}
+                    onClick={() => handleStartDm(viewingProfileAccount)}
+                  >
+                    发私信
+                  </button>
+                </div>
+              </div>
+              <div className="cp-xhs-profile-content">
+                <div className="cp-xhs-profile-tabs">
+                  <button
+                    type="button"
+                    className={profileTab === "notes" ? "is-active" : ""}
+                    onClick={() => setProfileTab("notes")}
+                  >
+                    笔记
+                  </button>
+                  <button
+                    type="button"
+                    className={profileTab === "saved" ? "is-active" : ""}
+                    onClick={() => setProfileTab("saved")}
+                  >
+                    赞过/收藏
+                  </button>
+                </div>
+                {renderWaterfall(
+                  profileTab === "notes"
+                    ? splitColumns(state.notes.filter(n => n.source === viewingProfileAccount.type && n.authorId === viewingProfileAccount.id))
+                    : splitColumns(state.notes.filter(n => n.comments.some(c => c.authorType === viewingProfileAccount.type && c.authorId === viewingProfileAccount.id) || n.recentLikeNames.includes(viewingProfileAccount.name) || n.recentSaveNames.includes(viewingProfileAccount.name)))
+                )}
+              </div>
+            </section>
+          ) : selectedTab === "profile" ? (
             <section className="cp-xhs-profile xhs-profile">
               <div className={`cp-xhs-profile-topbar ${profileTopbarVisible ? "is-visible" : ""}`}>
                 <button type="button" onClick={requestClose} aria-label="返回桌面">
@@ -3176,6 +3453,170 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                       );
                     })
                   )}
+                </div>
+              </div>
+
+              <div className="xhs-profile-edit-field">
+                <span className="xhs-profile-edit-section-title">THEMES & GENERATION <em>主题与生成</em></span>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {(settingsDraft.customThemes || []).map((theme) => {
+                      const isActive = (settingsDraft.activeThemes || []).includes(theme);
+                      return (
+                        <button
+                          key={theme}
+                          type="button"
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "14px",
+                            fontSize: "12px",
+                            border: "1px solid #ddd",
+                            backgroundColor: isActive ? "#ff2442" : "#f5f5f5",
+                            color: isActive ? "white" : "#333",
+                          }}
+                          onClick={() => {
+                            const active = settingsDraft.activeThemes || [];
+                            const nextActive = active.includes(theme)
+                              ? active.filter(t => t !== theme)
+                              : [...active, theme];
+                            setSettingsDraft(prev => ({ ...prev, activeThemes: nextActive }));
+                          }}
+                        >
+                          {theme}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <input
+                      style={{
+                        flex: 1,
+                        padding: "6px 12px",
+                        borderRadius: "16px",
+                        border: "1px solid #ddd",
+                        fontSize: "13px",
+                      }}
+                      value={newThemeInput}
+                      onChange={e => setNewThemeInput(e.target.value)}
+                      placeholder="新增自定义主题..."
+                    />
+                    <button
+                      type="button"
+                      style={{
+                        padding: "6px 14px",
+                        backgroundColor: "#333",
+                        color: "white",
+                        borderRadius: "16px",
+                        fontSize: "13px",
+                      }}
+                      onClick={() => {
+                        const trimmed = newThemeInput.trim();
+                        if (!trimmed) return;
+                        const currentCustom = settingsDraft.customThemes || [];
+                        if (!currentCustom.includes(trimmed)) {
+                          setSettingsDraft(prev => ({
+                            ...prev,
+                            customThemes: [...currentCustom, trimmed],
+                            activeThemes: [...(prev.activeThemes || []), trimmed]
+                          }));
+                        }
+                        setNewThemeInput("");
+                      }}
+                    >
+                      添加
+                    </button>
+                  </div>
+
+                  <div className="xhs-settings-toggle-list" style={{ marginTop: 8 }}>
+                    <div className="xhs-settings-toggle-row">
+                      <div>
+                        <strong>一次生成数量</strong>
+                        <span>数量 (1-10)</span>
+                      </div>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        style={{
+                          width: "60px",
+                          padding: "4px 8px",
+                          borderRadius: "8px",
+                          border: "1px solid #ddd",
+                          textAlign: "center"
+                        }}
+                        value={settingsDraft.generateCount || 3}
+                        onChange={e => setSettingsDraft(prev => ({ ...prev, generateCount: Math.max(1, Math.min(10, Number(e.target.value) || 3)) }))}
+                      />
+                    </div>
+
+                    <div className="xhs-settings-toggle-row">
+                      <div>
+                        <strong>调用生图 API</strong>
+                        <span>为指定角色生成配图</span>
+                      </div>
+                      <Toggle
+                        checked={settingsDraft.generateImages || false}
+                        onChange={checked => setSettingsDraft(prev => ({ ...prev, generateImages: checked }))}
+                      />
+                    </div>
+                  </div>
+
+                  {settingsDraft.generateImages && (
+                    <div style={{ marginTop: 6 }}>
+                      <span style={{ fontSize: "12px", color: "#666", marginBottom: "6px", display: "block" }}>
+                        指定哪个角色的帖子生成图片：
+                      </span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        {characters.map((character) => {
+                          const isSelected = (settingsDraft.imageGenCharacterIds || []).includes(character.id);
+                          return (
+                            <button
+                              key={character.id}
+                              type="button"
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: "12px",
+                                fontSize: "11px",
+                                border: "1px solid #ddd",
+                                backgroundColor: isSelected ? "#333" : "#f5f5f5",
+                                color: isSelected ? "white" : "#666",
+                              }}
+                              onClick={() => {
+                                const currentIds = settingsDraft.imageGenCharacterIds || [];
+                                const nextIds = isSelected
+                                  ? currentIds.filter(id => id !== character.id)
+                                  : [...currentIds, character.id];
+                                setSettingsDraft(prev => ({ ...prev, imageGenCharacterIds: nextIds }));
+                              }}
+                            >
+                              {character.name}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      backgroundColor: "#ff2442",
+                      color: "white",
+                      borderRadius: "20px",
+                      fontSize: "14px",
+                      fontWeight: "bold",
+                      marginTop: "10px"
+                    }}
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      handleGenerateThematicContent();
+                    }}
+                  >
+                    按照所选主题生成帖子
+                  </button>
                 </div>
               </div>
 

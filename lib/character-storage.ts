@@ -59,8 +59,8 @@ export function loadCharacters(): Character[] {
         else delete char.timeZone;
         needsSave = true;
       }
-      // Sanitize avatars: only keep data-URLs and http(s) URLs
-      if (char.avatar && !char.avatar.startsWith("data:") && !char.avatar.startsWith("http://") && !char.avatar.startsWith("https://")) {
+      // Sanitize avatars: only keep data-URLs, blob-URLs, store-URLs and http(s) URLs
+      if (char.avatar && !char.avatar.startsWith("data:") && !char.avatar.startsWith("blob:") && !char.avatar.startsWith("media-store://") && !char.avatar.startsWith("http://") && !char.avatar.startsWith("https://")) {
         char.avatar = null;
         needsSave = true;
       }
