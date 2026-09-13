@@ -144,7 +144,86 @@ export function PhoneResourcesApp({ onClose, onNotice, initialPage }: { onClose:
                         onNotice={onNotice}
                     />
                 )}
+
+                {currentPage === "story_favorites" && (
+                    <StoryFavoritesPage onNotice={onNotice} />
+                )}
             </div>
         </PageShell>
+    );
+}
+
+function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) {
+    const [favorites, setFavorites] = useState<StoryFavorite[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        loadStoryFavorites()
+            .then(data => {
+                setFavorites(data.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+            })
+            .catch(() => {})
+            .finally(() => setLoading(false));
+    }, []);
+
+    const handleDelete = async (id: string) => {
+        if (!confirm("确定要删除这条收藏吗？")) return;
+        await deleteStoryFavorite(id);
+        setFavorites(prev => prev.filter(item => item.id !== id));
+        if (onNotice) {
+            onNotice("已取消收藏");
+        } else {
+            alert("已取消收藏");
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="flex items-center justify-center p-8 text-neutral-400 text-sm">
+                加载中...
+            </div>
+        );
+    }
+
+    if (favorites.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-center text-neutral-400">
+                <Bookmark className="w-12 h-12 opacity-30 mb-3 text-neutral-300" />
+                <p className="text-sm font-medium">还没有任何剧情收藏</p>
+                <p className="text-xs opacity-70 mt-1">在剧情聊天中长按或右键消息即可添加收藏</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 flex flex-col gap-4">
+            {favorites.map((fav) => (
+                <div
+                    key={fav.id}
+                    className="p-4 rounded-xl bg-white border border-neutral-100 shadow-sm flex flex-col gap-3 relative group"
+                >
+                    <div className="flex justify-between items-start gap-4">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-xs font-semibold px-2 py-0.5 bg-pink-50 text-pink-600 rounded-full w-fit">
+                                {fav.annotation}
+                            </span>
+                            <span className="text-xs text-neutral-400">
+                                角色：{fav.characterName} • {new Date(fav.createdAt).toLocaleDateString()}
+                            </span>
+                        </div>
+                        <button
+                            onClick={() => handleDelete(fav.id)}
+                            className="p-1.5 hover:bg-red-50 text-neutral-400 hover:text-red-500 rounded-lg transition-colors"
+                            title="删除收藏"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                    <div className="text-sm text-neutral-700 bg-neutral-50 p-3 rounded-lg border border-neutral-100 whitespace-pre-wrap leading-relaxed">
+                        {fav.rawContent.replace(/<[^>]+>/g, "").trim()}
+                    </div>
+                </div>
+            ))}
+        </div>
     );
 }
