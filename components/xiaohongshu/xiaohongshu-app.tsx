@@ -2388,7 +2388,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       imageAssetId: note.imageAssetId,
       coverIcon: note.coverIcon,
       tone: note.tone,
-    } satisfies ChatSharePayload;
+    };
     window.dispatchEvent(new CustomEvent("open-mini-chat", { detail: { share } }));
     onNotice?.("选择聊天对象后发送小红书帖子");
   }
@@ -2962,8 +2962,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   {selectedAuthorFollowing ? "已关注" : "关注"}
                 </button>
               ) : null}
-              <button type="button" className="cp-xhs-detail-share" aria-label="分享" onClick={() => handleShareNote(selectedNote)}>
-                <ShareFat size={25} weight="regular" />
+              <button type="button" className="cp-xhs-detail-share" aria-label="分享" onClick={() => selectedNote && handleShareNote(selectedNote)}>
+                <Share size={25} />
               </button>
             </div>
             <article className="cp-xhs-note-detail xhs-note-detail-page">
