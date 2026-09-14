@@ -65,6 +65,7 @@ import {
   makeXiaohongshuNotification,
   saveXiaohongshuState,
 } from "@/lib/xiaohongshu-storage";
+import { createOrGetSession } from "@/lib/chat-storage";
 import {
   deleteXiaohongshuProjectionEventForComment,
   deleteXiaohongshuProjectionEventsForNote,
@@ -117,8 +118,7 @@ type PendingFeedAction = "refresh" | "clear";
 
 const TABS: Array<{ id: XiaohongshuTabId; label: string; icon: typeof Home }> = [
   { id: "home", label: "首页", icon: Home },
-  { id: "video", label: "附近", icon: MapPin },
-  { id: "publish", label: "发布", icon: Plus },
+  { id: "video", label: "主页", icon: MapPin },
   { id: "messages", label: "消息", icon: Bell },
   { id: "profile", label: "我的", icon: UserRound },
 ];
@@ -1945,6 +1945,20 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   }
 
   function handleStartDm(account: XiaohongshuAccount) {
+    if (account.type === "character") {
+      // 私信与聊天app记忆互通：
+      // 1. 获取对应的角色
+      const character = characters.find(c => c.id === account.id);
+      if (character) {
+        // 2. 找到或创建该角色在 chat-storage 里的私聊会话并跳转
+        const chatSession = createOrGetSession(character.id);
+        if (chatSession) {
+          onClose(false); // 关闭小红书
+          window.dispatchEvent(new CustomEvent("open-chat-session", { detail: { sessionId: chatSession.id } }));
+          return;
+        }
+      }
+    }
     const threadId = account.type === "character" ? `dm:char:${account.id}` : `dm:${account.name}`;
     const existing = state.notifications.some(n => n.threadId === threadId);
     if (!existing) {
@@ -2695,7 +2709,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
               </>
             ) : (
               <div className="cp-xhs-header-title is-active">
-                {selectedTab === "video" ? "附近" : selectedTab === "messages" ? "消息" : "发布"}
+                {selectedTab === "video" ? "主页" : selectedTab === "messages" ? "消息" : "发布"}
               </div>
             )}
           </div>
@@ -3226,7 +3240,12 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                   </div>
                 </div>
                 <div className="cp-xhs-profile-bio">
-                  <p>{viewingProfileAccount.type === "character" ? "我是 AI 虚拟手机驻场角色" : "小红书冲浪达人"}</p>
+                  <p>
+                    {viewingProfileAccount.type === "character" ? (
+                      // 主页的签名不会显示“我是AI”，而是根据人设进行个性化的签名
+                      characters.find(c => c.id === viewingProfileAccount.id)?.persona?.slice(0, 80) || "生活分享冲浪达人"
+                    ) : "小红书冲浪达人"}
+                  </p>
                 </div>
                 <div className="cp-xhs-profile-actions">
                   <div className="cp-xhs-profile-stats">
@@ -3356,29 +3375,34 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       </main>
 
       {!selectedNote && !isMessageSubpage ? <nav className="cp-xhs-tabbar xhs-tabbar" aria-label="小红书导航">
-        {TABS.map((tab) => {
-          if (tab.id === "publish") {
-            return (
-              <button key={tab.id} type="button" className="cp-xhs-tab-publish" onClick={() => setComposeOpen(true)} aria-label="发布">
-                <div className="cp-xhs-tab-publish-inner"><Plus size={20} strokeWidth={3} /></div>
-              </button>
-            );
-          }
+        {TABS.map((tab, idx) => {
           const active = selectedTab === tab.id;
+          const isHomeTab = tab.id === "home";
           return (
-            <button
-              key={tab.id}
-              type="button"
-              className={`cp-xhs-tab ${active ? "is-active" : ""}`}
-              onClick={() => setSelectedTab(tab.id)}
-            >
-              <div className="cp-xhs-tab-inner">
-                <span>{tab.label}</span>
-                {tab.id === "messages" && unreadCount > 0 ? (
-                  <span className="cp-xhs-tab-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
-                ) : null}
-              </div>
-            </button>
+            <div key={tab.id} className="flex-1 flex items-center justify-center relative">
+              <button
+                type="button"
+                className={`cp-xhs-tab ${active ? "is-active" : ""}`}
+                onClick={() => setSelectedTab(tab.id)}
+              >
+                <div className="cp-xhs-tab-inner">
+                  <span>{tab.label}</span>
+                  {tab.id === "messages" && unreadCount > 0 ? (
+                    <span className="cp-xhs-tab-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                  ) : null}
+                </div>
+              </button>
+              {isHomeTab && (
+                <button
+                  type="button"
+                  className="absolute right-[-18px] top-1/2 translate-y-[-50%] w-[32px] h-[32px] rounded-lg bg-[#ff2442] flex items-center justify-center text-white shadow-md z-[5]"
+                  onClick={() => setComposeOpen(true)}
+                  aria-label="发布"
+                >
+                  <Plus size={18} strokeWidth={3} />
+                </button>
+              )}
+            </div>
           );
         })}
       </nav> : null}
