@@ -195,24 +195,24 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
         if (!text) return "";
         let clean = text;
 
-        // 1. Remove XML-style think/thinking/thought/reasoning/summary tags and their contents
+        // 1. Remove XML-style think/thinking/thought/reasoning/summary tags and their contents (supporting unclosed tags)
         const tagsToRemove = ["think", "thinking", "thought", "reasoning", "summary"];
         for (const tag of tagsToRemove) {
-            const rx = new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, "gi");
+            const rx = new RegExp(`<${tag}>[\\s\\S]*?(<\\/${tag}>|$)`, "gi");
             clean = clean.replace(rx, "");
         }
 
-        // 2. Remove common text patterns of thinking blocks
-        clean = clean.replace(/【思考】[\s\S]*?(【\/思考】|(?=【|$))/gi, "");
-        clean = clean.replace(/\[Thinking\][\s\S]*?(\[\/Thinking\]|(?=\[|$))/gi, "");
-        clean = clean.replace(/\[thought\][\s\S]*?(\[\/thought\]|(?=\[|$))/gi, "");
-        clean = clean.replace(/\[思考\][\s\S]*?(\[\/思考\]|(?=\[|$))/gi, "");
+        // 2. Remove common text patterns of thinking blocks (supporting unclosed blocks)
+        clean = clean.replace(/【思考】[\s\S]*?(【\/思考】|$)/gi, "");
+        clean = clean.replace(/\[Thinking\][\s\S]*?(\[\/Thinking\]|$)/gi, "");
+        clean = clean.replace(/\[thought\][\s\S]*?(\[\/thought\]|$)/gi, "");
+        clean = clean.replace(/\[思考\][\s\S]*?(\[\/思考\]|$)/gi, "");
         
-        // Remove lines starting with "Thinking Process:", "思考过程：", etc.
-        clean = clean.replace(/^(Thinking Process|Thinking|思考过程|思考|思维链)：[\s\S]*?(\n\n|$)/gi, "");
+        // Remove lines starting with "Thinking Process:", "思考过程：", etc. (supporting multiline block to the end)
+        clean = clean.replace(/^(Thinking Process|Thinking|思考过程|思考|思维链)[：:][\s\S]*?(\n\n|$)/gi, "");
 
-        // 3. Remove comments of fold blocks: <!--RHR-FOLD:xxx-->...<!--/RHR-FOLD-->
-        clean = clean.replace(/<!--RHR-FOLD:[\s\S]*?-->[\s\S]*?<!--\/RHR-FOLD-->/gi, "");
+        // 3. Remove comments of fold blocks: <!--RHR-FOLD:xxx-->...<!--/RHR-FOLD--> (supporting unclosed comment blocks)
+        clean = clean.replace(/<!--RHR-FOLD:[\s\S]*?-->[\s\S]*?(<!--\/RHR-FOLD-->|$)/gi, "");
 
         // 4. Remove any remaining HTML tags
         clean = clean.replace(/<[^>]+>/g, "");
