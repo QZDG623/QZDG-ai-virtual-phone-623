@@ -195,6 +195,19 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
         );
     }
 
+    const stripThinkingAndTags = (text: string): string => {
+        if (!text) return "";
+        let clean = text;
+        const tagsToRemove = ["think", "thinking", "reasoning", "summary"];
+        for (const tag of tagsToRemove) {
+            const rx = new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, "gi");
+            clean = clean.replace(rx, "");
+        }
+        clean = clean.replace(/<!--RHR-FOLD:[\s\S]*?-->[\s\S]*?<!--\/RHR-FOLD-->/gi, "");
+        clean = clean.replace(/<[^>]+>/g, "");
+        return clean.replace(/\s*\n\s*\n\s*/g, "\n\n").trim();
+    };
+
     return (
         <div className="p-4 flex flex-col gap-4">
             {favorites.map((fav) => (
@@ -220,7 +233,7 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
                         </button>
                     </div>
                     <div className="text-sm text-neutral-700 bg-neutral-50 p-3 rounded-lg border border-neutral-100 whitespace-pre-wrap leading-relaxed">
-                        {fav.rawContent.replace(/<[^>]+>/g, "").trim()}
+                        {stripThinkingAndTags(fav.rawContent)}
                     </div>
                 </div>
             ))}
