@@ -464,10 +464,11 @@ function NoteImage({
   isDetail?: boolean;
 }) {
   // @ts-ignore
-  const imageIds = (note.imageAssetIds && note.imageAssetIds.length > 0)
+  const imageIds = (note && note.imageAssetIds && note.imageAssetIds.length > 0)
     // @ts-ignore
     ? note.imageAssetIds
-    : (note.imageAssetId ? [note.imageAssetId] : []);
+    : (note && note.imageAssetId ? [note.imageAssetId] : []);
+  if (!note) return null;
   if (note.type === "video") {
     return (
       <div className={`cp-xhs-cover cp-xhs-cover--video cp-xhs-cover--${note.tone}`} style={VIDEO_XHS_IMAGE_FRAME_STYLE}>
@@ -2967,6 +2968,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 <Share size={25} />
               </button>
             </div>
+            {selectedNote && (
             <article className="cp-xhs-note-detail xhs-note-detail-page">
               <div className="xhs-note-detail-media">
                 <NoteImage
@@ -3032,6 +3034,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 </div>
               </div>
             </article>
+            )}
+            {selectedNote && (
             <div className={`cp-xhs-detail-bottom-bar xhs-detail-bottom-bar ${commentComposerExpanded ? "is-expanded" : ""}`}>
               <div className="xhs-detail-comment-stack">
                 {replyTarget && replyTarget.noteId === selectedNote.id ? (
@@ -3073,6 +3077,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                 </button>
               </div> : null}
             </div>
+            )}
           </div>
         ) : (
         <div ref={mainScrollRef} className={`cp-xhs-scroll ${selectedTab === "profile" ? "cp-xhs-scroll--profile" : ""}`} onScroll={handleMainScroll}>
