@@ -217,6 +217,21 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
         // 4. Remove any remaining HTML tags
         clean = clean.replace(/<[^>]+>/g, "");
 
+        // 5. Remove paragraphs that are purely English (e.g. English thinking process or duplicate English translations)
+        // Keep short English phrases (like "OK", "Hello") by only stripping paragraphs longer than 15 characters that have NO Chinese.
+        const paragraphs = clean.split("\n");
+        const filteredParagraphs = paragraphs.filter(para => {
+            const trimmed = para.trim();
+            if (!trimmed) return true; // Keep spacing lines
+            const hasChinese = /[\u4e00-\u9fa5]/.test(trimmed);
+            const hasEnglish = /[a-zA-Z]/.test(trimmed);
+            if (hasEnglish && !hasChinese && trimmed.length > 15) {
+                return false; // Strip long plain English paragraphs
+            }
+            return true;
+        });
+        clean = filteredParagraphs.join("\n");
+
         return clean.replace(/\s*\n\s*\n\s*/g, "\n\n").trim();
     };
 
