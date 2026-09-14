@@ -18,6 +18,7 @@ import {
   Plus,
   RotateCw,
   Search,
+  Share,
   Send,
   Smile,
   Sparkles,
