@@ -280,7 +280,7 @@ function getCommentReplyTargetName(
   return comments.find((item) => item.id === comment.replyToCommentId)?.authorName ?? "";
 }
 
-function XiaohongshuCommentList({ comments }: { comments: CheckPhoneXiaohongshuNote["comments"] }) {
+function XiaohongshuCommentList({ comments, onAuthorClick }: { comments: CheckPhoneXiaohongshuNote["comments"]; onAuthorClick?: (name: string) => void }) {
   if (comments.length === 0) {
     return <div className="cp-xhs-mini-empty">还没有人评论，快来抢沙发~</div>;
   }
@@ -295,9 +295,9 @@ function XiaohongshuCommentList({ comments }: { comments: CheckPhoneXiaohongshuN
         const replyTargetName = replyDepth > 0 ? getCommentReplyTargetName(comments, comment) : "";
         return (
           <div key={comment.id} className={`cp-xhs-comment-card cp-xhs-comment-card--depth-${visualReplyDepth}`}>
-            <div className="cp-xhs-comment-avatar">{comment.authorName.slice(0, 1)}</div>
+            <div className="cp-xhs-comment-avatar cursor-pointer" onClick={() => onAuthorClick?.(comment.authorName)}>{comment.authorName.slice(0, 1)}</div>
             <div className="cp-xhs-comment-content">
-              <strong>
+              <strong className="cursor-pointer" onClick={() => onAuthorClick?.(comment.authorName)}>
                 {comment.authorName}
                 {replyTargetName ? (
                   <>
@@ -318,18 +318,19 @@ function XiaohongshuCommentList({ comments }: { comments: CheckPhoneXiaohongshuN
 function XiaohongshuNoteCard({
   note,
   onOpen,
+  onAuthorClick,
   displayMode = "note",
 }: {
   note: CheckPhoneXiaohongshuNote;
   onOpen: () => void;
+  onAuthorClick?: (name: string) => void;
   displayMode?: "note" | "video";
 }) {
   const variant = getNoteCardVariant(note);
   const engagementCounts = getVisibleEngagementCounts(note);
   const isVideo = displayMode === "video";
   return (
-    <button
-      type="button"
+    <div
       className={`cp-xhs-note-card cp-xhs-note-card--${variant} ${isVideo ? "cp-xhs-note-card--video" : ""}`}
       onClick={onOpen}
     >
@@ -342,7 +343,7 @@ function XiaohongshuNoteCard({
         <strong><CheckPhoneBilingualText text={note.title} tone="xiaohongshu" /></strong>
         <p><CheckPhoneBilingualText text={note.body} tone="xiaohongshu" /></p>
         <div className="cp-xhs-note-foot">
-          <div className="cp-xhs-note-author">
+          <div className="cp-xhs-note-author cursor-pointer" onClick={(e) => { e.stopPropagation(); onAuthorClick?.(note.authorName); }}>
             <div className="cp-xhs-note-author-avatar">{note.authorName.slice(0, 1)}</div>
             <span>{note.authorName}</span>
           </div>
@@ -352,7 +353,7 @@ function XiaohongshuNoteCard({
           </em>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -361,6 +362,9 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
   const [selectedTab, setSelectedTab] = useState<XiaohongshuTabId>("home");
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [viewingProfileAccount, setViewingProfileAccount] = useState<{ id: string; name: string } | null>(null);
+  const [extraThreads, setExtraThreads] = useState<CheckPhoneXiaohongshuThread[]>([]);
+  const [followedAuthors, setFollowedAuthors] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useCheckPhoneRefresh(character.id, "xiaohongshu", setSnapshot);
   const [error, setError] = useState<string | null>(null);
@@ -527,8 +531,8 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
   );
   const activeVideoCaption = activeNoteIsVideo ? activeNote?.body ?? "" : "";
   const activeThread = useMemo(
-    () => payload?.messageThreads.find((thread) => thread.id === selectedThreadId) ?? null,
-    [payload, selectedThreadId],
+    () => combinedThreads.find((thread) => thread.id === selectedThreadId) ?? null,
+    [combinedThreads, selectedThreadId],
   );
   const homeColumns = useMemo(
     () => splitNotesIntoColumns(payload?.homeNotes ?? []),
@@ -542,13 +546,19 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
     () => splitNotesIntoColumns(payload?.myNotes ?? []),
     [payload?.myNotes],
   );
+  const combinedThreads = useMemo(() => {
+    if (!payload) return [];
+    const base = payload.messageThreads;
+    const extra = extraThreads.filter(et => !base.some(b => b.id === et.id));
+    return [...extra, ...base];
+  }, [payload, extraThreads]);
   const messageBadgeCount = useMemo(() => {
     if (!payload) return 0;
     return payload.messageOverview.likesAndSavesCount
       + payload.messageOverview.newFollowersCount
       + payload.messageOverview.commentsAndMentionsCount
-      + payload.messageThreads.filter((thread) => isThreadVisibleUnread(thread, readThreadIds)).length;
-  }, [payload, readThreadIds]);
+      + combinedThreads.filter((thread) => isThreadVisibleUnread(thread, readThreadIds)).length;
+  }, [payload, readThreadIds, combinedThreads]);
   const xiaohongshuNumericId = useMemo(
     () => makeXiaohongshuNumericId(`${character.id}:${character.name}`),
     [character.id, character.name],
@@ -613,7 +623,9 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
     ? () => setSelectedNoteId(null)
     : activeThread
       ? () => setSelectedThreadId(null)
-      : onBack;
+      : viewingProfileAccount
+        ? () => setViewingProfileAccount(null)
+        : onBack;
 
   function handleThreadOpen(thread: CheckPhoneXiaohongshuThread) {
     if (isThreadUnread(thread)) {
@@ -628,6 +640,40 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
       });
     }
     setSelectedThreadId(thread.id);
+  }
+
+  function handleStartDm(name: string) {
+    const threadId = `dm:${name}`;
+    const existing = combinedThreads.find(t => t.id === threadId);
+    if (!existing) {
+      const newThread: CheckPhoneXiaohongshuThread = {
+        id: threadId,
+        name,
+        type: "direct",
+        messages: [
+          {
+            id: `init:${name}:${Date.now()}`,
+            direction: "incoming",
+            authorName: name,
+            text: "你好呀！",
+            timeLabel: "刚刚"
+          }
+        ]
+      };
+      setExtraThreads(prev => [newThread, ...prev]);
+    }
+    setSelectedTab("messages");
+    setSelectedThreadId(threadId);
+    setViewingProfileAccount(null);
+    setSelectedNoteId(null);
+  }
+
+  function handleAuthorProfileClick(name: string) {
+    setViewingProfileAccount({
+      id: makeXiaohongshuNumericId(name),
+      name
+    });
+    setSelectedNoteId(null);
   }
 
   function handleMainScroll(event: UIEvent<HTMLDivElement>) {
@@ -921,12 +967,12 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                   <div className="cp-xhs-waterfall-grid">
                     <div className="cp-xhs-waterfall-column">
                       {homeColumns[0].map((note) => (
-                        <XiaohongshuNoteCard key={note.id} note={note} onOpen={() => setSelectedNoteId(note.id)} />
+                        <XiaohongshuNoteCard key={note.id} note={note} onOpen={() => setSelectedNoteId(note.id)} onAuthorClick={handleAuthorProfileClick} />
                       ))}
                     </div>
                     <div className="cp-xhs-waterfall-column">
                       {homeColumns[1].map((note) => (
-                        <XiaohongshuNoteCard key={note.id} note={note} onOpen={() => setSelectedNoteId(note.id)} />
+                        <XiaohongshuNoteCard key={note.id} note={note} onOpen={() => setSelectedNoteId(note.id)} onAuthorClick={handleAuthorProfileClick} />
                       ))}
                     </div>
                   </div>
@@ -938,12 +984,12 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                   <div className="cp-xhs-waterfall-grid">
                     <div className="cp-xhs-waterfall-column">
                       {videoColumns[0].map((note) => (
-                        <XiaohongshuNoteCard key={note.id} note={note} displayMode="video" onOpen={() => setSelectedNoteId(note.id)} />
+                        <XiaohongshuNoteCard key={note.id} note={note} displayMode="video" onOpen={() => setSelectedNoteId(note.id)} onAuthorClick={handleAuthorProfileClick} />
                       ))}
                     </div>
                     <div className="cp-xhs-waterfall-column">
                       {videoColumns[1].map((note) => (
-                        <XiaohongshuNoteCard key={note.id} note={note} displayMode="video" onOpen={() => setSelectedNoteId(note.id)} />
+                        <XiaohongshuNoteCard key={note.id} note={note} displayMode="video" onOpen={() => setSelectedNoteId(note.id)} onAuthorClick={handleAuthorProfileClick} />
                       ))}
                     </div>
                   </div>
@@ -982,7 +1028,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                     </div>
                   </div>
                   <div className="cp-xhs-thread-list">
-                    {payload.messageThreads.map((thread, index) => {
+                    {combinedThreads.map((thread, index) => {
                       const unread = isThreadVisibleUnread(thread, readThreadIds);
                       return (
                         <button
@@ -1169,7 +1215,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
                     <button type="button" onClick={() => setVideoCommentsOpen(false)} aria-label="Close comments">×</button>
                   </header>
                   <div className="cp-xhs-comment-list">
-                    <XiaohongshuCommentList comments={activeNote.comments} />
+                    <XiaohongshuCommentList comments={activeNote.comments} onAuthorClick={handleAuthorProfileClick} />
                   </div>
                 </section>
               </div>
@@ -1183,7 +1229,7 @@ export function CheckPhoneXiaohongshuPage({ character, onBack }: CheckPhoneXiaoh
               <button type="button" className="cp-xhs-detail-back" onClick={backAction} aria-label="Back">
                 <ChevronLeft size={24} strokeWidth={2.5} />
               </button>
-              <div className="cp-xhs-detail-author-info">
+              <div className="cp-xhs-detail-author-info cursor-pointer" onClick={() => handleAuthorProfileClick(activeNote.authorName)}>
                 <div className="cp-xhs-detail-avatar">{activeNote.authorName.slice(0, 1)}</div>
                 <span className="cp-xhs-detail-name">{activeNote.authorName}</span>
               </div>
