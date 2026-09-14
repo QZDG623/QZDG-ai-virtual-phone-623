@@ -217,7 +217,11 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
         // 4. Remove any remaining HTML tags
         clean = clean.replace(/<[^>]+>/g, "");
 
-        // 5. Remove paragraphs that are purely English (e.g. English thinking process or duplicate English translations)
+        // 5. Remove any continuous sequence of purely English words/punctuation of length 15 or more.
+        // This handles "英中各一遍" and English thinking blocks perfectly by removing the English translation/thought.
+        clean = clean.replace(/[a-zA-Z][a-zA-Z0-9\s,.:;!?'"()_-\[\]~@#$%^&*+=/\\|]{15,}/g, "");
+
+        // 6. Remove paragraphs that are purely English (e.g. English thinking process or duplicate English translations)
         // Keep short English phrases (like "OK", "Hello") by only stripping paragraphs longer than 3 characters that have NO Chinese.
         const paragraphs = clean.split("\n");
         const filteredParagraphs = paragraphs.filter(para => {
@@ -318,25 +322,14 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
                                         </div>
                                     </div>
 
-                                    {/* Collapsible Content (Partially visible/clamped when collapsed, fully visible when expanded) */}
-                                    <div className="px-3 pb-3">
-                                        <div 
-                                            className={`text-sm leading-relaxed p-2.5 rounded-lg border transition-all duration-300 ${
-                                                isExpanded 
-                                                    ? "bg-neutral-50 border-neutral-100 text-neutral-700 whitespace-pre-wrap" 
-                                                    : "bg-white border-transparent text-neutral-400"
-                                            }`}
-                                            style={isExpanded ? undefined : {
-                                                display: "-webkit-box",
-                                                WebkitLineClamp: 2,
-                                                WebkitBoxOrient: "vertical",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis"
-                                            }}
-                                        >
-                                            {cleanedContent}
+                                    {/* Collapsible Content (Strictly hidden when collapsed, fully visible when expanded) */}
+                                    {isExpanded && (
+                                        <div className="px-3 pb-3 border-t border-neutral-50 bg-neutral-50/50">
+                                            <div className="mt-3 text-sm text-neutral-700 bg-white p-3 rounded-lg border border-neutral-100 whitespace-pre-wrap leading-relaxed">
+                                                {cleanedContent}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             );
                         })}
