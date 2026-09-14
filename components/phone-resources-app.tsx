@@ -219,7 +219,7 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
 
         // 5. Remove any continuous sequence of purely English words/punctuation of length 15 or more.
         // This handles "英中各一遍" and English thinking blocks perfectly by removing the English translation/thought.
-        clean = clean.replace(/[a-zA-Z][a-zA-Z0-9\s,.:;!?'"()_-\[\]~@#$%^&*+=/\\|]{15,}/g, "");
+        clean = clean.replace(/[a-zA-Z][a-zA-Z0-9\s,.:;!?'"()_\[\]~@#$%^&*+=/\\|\-]{15,}/g, "");
 
         // 6. Remove paragraphs that are purely English (e.g. English thinking process or duplicate English translations)
         // Keep short English phrases (like "OK", "Hello") by only stripping paragraphs longer than 3 characters that have NO Chinese.
