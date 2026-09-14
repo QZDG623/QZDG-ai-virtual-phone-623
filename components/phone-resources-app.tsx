@@ -218,15 +218,15 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
         clean = clean.replace(/<[^>]+>/g, "");
 
         // 5. Remove paragraphs that are purely English (e.g. English thinking process or duplicate English translations)
-        // Keep short English phrases (like "OK", "Hello") by only stripping paragraphs longer than 15 characters that have NO Chinese.
+        // Keep short English phrases (like "OK", "Hello") by only stripping paragraphs longer than 3 characters that have NO Chinese.
         const paragraphs = clean.split("\n");
         const filteredParagraphs = paragraphs.filter(para => {
             const trimmed = para.trim();
             if (!trimmed) return true; // Keep spacing lines
             const hasChinese = /[\u4e00-\u9fa5]/.test(trimmed);
             const hasEnglish = /[a-zA-Z]/.test(trimmed);
-            if (hasEnglish && !hasChinese && trimmed.length > 15) {
-                return false; // Strip long plain English paragraphs
+            if (hasEnglish && !hasChinese && trimmed.length > 3) {
+                return false; // Strip English thinking/translation paragraphs
             }
             return true;
         });
@@ -281,6 +281,7 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
                     <div className="flex flex-col gap-2">
                         {items.map((fav) => {
                             const isExpanded = expandedIds[fav.id];
+                            const cleanedContent = stripThinkingAndTags(fav.rawContent);
                             return (
                                 <div
                                     key={fav.id}
@@ -288,12 +289,12 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
                                     className="rounded-xl bg-white border border-neutral-100 shadow-sm flex flex-col overflow-hidden cursor-pointer hover:border-pink-200 transition-colors"
                                 >
                                     {/* Header Row (Always visible) */}
-                                    <div className="p-3 flex justify-between items-center gap-4">
+                                    <div className="p-3 pb-1 flex justify-between items-center gap-4">
                                         <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
                                             <span className="text-xs font-semibold px-2 py-0.5 bg-pink-50 text-pink-600 rounded-full max-w-[124px] truncate">
                                                 {fav.annotation}
                                             </span>
-                                            <span className="text-xs text-neutral-500 font-medium truncate">
+                                            <span className="text-xs text-neutral-400 font-medium truncate">
                                                 角色：{fav.characterName}
                                             </span>
                                         </div>
@@ -317,14 +318,25 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
                                         </div>
                                     </div>
 
-                                    {/* Collapsible Content */}
-                                    {isExpanded && (
-                                        <div className="px-3 pb-3 border-t border-neutral-50 bg-neutral-50/50">
-                                            <div className="mt-3 text-sm text-neutral-700 bg-white p-3 rounded-lg border border-neutral-100 whitespace-pre-wrap leading-relaxed">
-                                                {stripThinkingAndTags(fav.rawContent)}
-                                            </div>
+                                    {/* Collapsible Content (Partially visible/clamped when collapsed, fully visible when expanded) */}
+                                    <div className="px-3 pb-3">
+                                        <div 
+                                            className={`text-sm leading-relaxed p-2.5 rounded-lg border transition-all duration-300 ${
+                                                isExpanded 
+                                                    ? "bg-neutral-50 border-neutral-100 text-neutral-700 whitespace-pre-wrap" 
+                                                    : "bg-white border-transparent text-neutral-400"
+                                            }`}
+                                            style={isExpanded ? undefined : {
+                                                display: "-webkit-box",
+                                                WebkitLineClamp: 2,
+                                                WebkitBoxOrient: "vertical",
+                                                overflow: "hidden",
+                                                textOverflow: "ellipsis"
+                                            }}
+                                        >
+                                            {cleanedContent}
                                         </div>
-                                    )}
+                                    </div>
                                 </div>
                             );
                         })}
