@@ -153,9 +153,12 @@ export function PhoneResourcesApp({ onClose, onNotice, initialPage }: { onClose:
     );
 }
 
+import { useMemo } from "react";
+
 function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) {
     const [favorites, setFavorites] = useState<StoryFavorite[]>([]);
     const [loading, setLoading] = useState(true);
+    const [expandedIds, setExpandedIds] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         loadStoryFavorites()
@@ -166,7 +169,8 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
             .finally(() => setLoading(false));
     }, []);
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
         if (!confirm("确定要删除这条收藏吗？")) return;
         await deleteStoryFavorite(id);
         setFavorites(prev => prev.filter(item => item.id !== id));
@@ -176,6 +180,56 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
             alert("已取消收藏");
         }
     };
+
+    const toggleExpand = (id: string) => {
+        setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
+    };
+
+    const getLocalDateStr = (iso: string) => {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return "未知日期";
+        return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+    };
+
+    const stripThinkingAndTags = (text: string): string => {
+        if (!text) return "";
+        let clean = text;
+
+        // 1. Remove XML-style think/thinking/thought/reasoning/summary tags and their contents
+        const tagsToRemove = ["think", "thinking", "thought", "reasoning", "summary"];
+        for (const tag of tagsToRemove) {
+            const rx = new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, "gi");
+            clean = clean.replace(rx, "");
+        }
+
+        // 2. Remove common text patterns of thinking blocks
+        clean = clean.replace(/【思考】[\s\S]*?(【\/思考】|(?=【|$))/gi, "");
+        clean = clean.replace(/\[Thinking\][\s\S]*?(\[\/Thinking\]|(?=\[|$))/gi, "");
+        clean = clean.replace(/\[thought\][\s\S]*?(\[\/thought\]|(?=\[|$))/gi, "");
+        clean = clean.replace(/\[思考\][\s\S]*?(\[\/思考\]|(?=\[|$))/gi, "");
+        
+        // Remove lines starting with "Thinking Process:", "思考过程：", etc.
+        clean = clean.replace(/^(Thinking Process|Thinking|思考过程|思考|思维链)：[\s\S]*?(\n\n|$)/gi, "");
+
+        // 3. Remove comments of fold blocks: <!--RHR-FOLD:xxx-->...<!--/RHR-FOLD-->
+        clean = clean.replace(/<!--RHR-FOLD:[\s\S]*?-->[\s\S]*?<!--\/RHR-FOLD-->/gi, "");
+
+        // 4. Remove any remaining HTML tags
+        clean = clean.replace(/<[^>]+>/g, "");
+
+        return clean.replace(/\s*\n\s*\n\s*/g, "\n\n").trim();
+    };
+
+    // Group favorites by date
+    const groupedFavorites = useMemo(() => {
+        const groups: { [dateStr: string]: StoryFavorite[] } = {};
+        favorites.forEach(fav => {
+            const dStr = getLocalDateStr(fav.createdAt);
+            if (!groups[dStr]) groups[dStr] = [];
+            groups[dStr].push(fav);
+        });
+        return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+    }, [favorites]);
 
     if (loading) {
         return (
@@ -195,45 +249,70 @@ function StoryFavoritesPage({ onNotice }: { onNotice?: (msg: string) => void }) 
         );
     }
 
-    const stripThinkingAndTags = (text: string): string => {
-        if (!text) return "";
-        let clean = text;
-        const tagsToRemove = ["think", "thinking", "reasoning", "summary"];
-        for (const tag of tagsToRemove) {
-            const rx = new RegExp(`<${tag}>[\\s\\S]*?</${tag}>`, "gi");
-            clean = clean.replace(rx, "");
-        }
-        clean = clean.replace(/<!--RHR-FOLD:[\s\S]*?-->[\s\S]*?<!--\/RHR-FOLD-->/gi, "");
-        clean = clean.replace(/<[^>]+>/g, "");
-        return clean.replace(/\s*\n\s*\n\s*/g, "\n\n").trim();
-    };
-
     return (
-        <div className="p-4 flex flex-col gap-4">
-            {favorites.map((fav) => (
-                <div
-                    key={fav.id}
-                    className="p-4 rounded-xl bg-white border border-neutral-100 shadow-sm flex flex-col gap-3 relative group"
-                >
-                    <div className="flex justify-between items-start gap-4">
-                        <div className="flex flex-col gap-1">
-                            <span className="text-xs font-semibold px-2 py-0.5 bg-pink-50 text-pink-600 rounded-full w-fit">
-                                {fav.annotation}
-                            </span>
-                            <span className="text-xs text-neutral-400">
-                                角色：{fav.characterName} • {new Date(fav.createdAt).toLocaleDateString()}
-                            </span>
-                        </div>
-                        <button
-                            onClick={() => handleDelete(fav.id)}
-                            className="p-1.5 hover:bg-red-50 text-neutral-400 hover:text-red-500 rounded-lg transition-colors"
-                            title="删除收藏"
-                        >
-                            <Trash2 size={16} />
-                        </button>
+        <div className="p-4 flex flex-col gap-6">
+            {groupedFavorites.map(([dateStr, items]) => (
+                <div key={dateStr} className="flex flex-col gap-3">
+                    {/* Date Section Header */}
+                    <div className="flex items-center gap-2">
+                        <div className="h-[1px] flex-1 bg-neutral-100" />
+                        <span className="text-xs font-medium text-neutral-400 px-2 bg-neutral-50 rounded-full border border-neutral-100">
+                            {dateStr}
+                        </span>
+                        <div className="h-[1px] flex-1 bg-neutral-100" />
                     </div>
-                    <div className="text-sm text-neutral-700 bg-neutral-50 p-3 rounded-lg border border-neutral-100 whitespace-pre-wrap leading-relaxed">
-                        {stripThinkingAndTags(fav.rawContent)}
+
+                    {/* Favorites of this date */}
+                    <div className="flex flex-col gap-2">
+                        {items.map((fav) => {
+                            const isExpanded = expandedIds[fav.id];
+                            return (
+                                <div
+                                    key={fav.id}
+                                    onClick={() => toggleExpand(fav.id)}
+                                    className="rounded-xl bg-white border border-neutral-100 shadow-sm flex flex-col overflow-hidden cursor-pointer hover:border-pink-200 transition-colors"
+                                >
+                                    {/* Header Row (Always visible) */}
+                                    <div className="p-3 flex justify-between items-center gap-4">
+                                        <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                                            <span className="text-xs font-semibold px-2 py-0.5 bg-pink-50 text-pink-600 rounded-full max-w-[124px] truncate">
+                                                {fav.annotation}
+                                            </span>
+                                            <span className="text-xs text-neutral-500 font-medium truncate">
+                                                角色：{fav.characterName}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                            <button
+                                                onClick={(e) => handleDelete(fav.id, e)}
+                                                className="p-1.5 hover:bg-red-50 text-neutral-400 hover:text-red-500 rounded-lg transition-colors"
+                                                title="删除收藏"
+                                            >
+                                                <Trash2 size={15} />
+                                            </button>
+                                            <svg
+                                                className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth="2.5"
+                                            >
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+
+                                    {/* Collapsible Content */}
+                                    {isExpanded && (
+                                        <div className="px-3 pb-3 border-t border-neutral-50 bg-neutral-50/50">
+                                            <div className="mt-3 text-sm text-neutral-700 bg-white p-3 rounded-lg border border-neutral-100 whitespace-pre-wrap leading-relaxed">
+                                                {stripThinkingAndTags(fav.rawContent)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             ))}
