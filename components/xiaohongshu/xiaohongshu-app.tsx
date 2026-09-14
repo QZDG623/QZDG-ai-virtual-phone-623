@@ -861,8 +861,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
   const selectedMessagePanelLabel = messagePanel === "engagement" ? "点赞和收藏" : messagePanel === "follow" ? "新增关注" : messagePanel === "comment" ? "评论" : "";
   const selectedMessagePanelTitle = messagePanel === "engagement" ? "收到的赞和收藏" : selectedMessagePanelLabel;
   const isMessageSubpage = selectedTab === "messages" && (Boolean(messagePanel) || Boolean(selectedDmThread));
-  const selectedAuthorAccount = useMemo(() => selectedNote ? makeAccountFromNote(selectedNote) : null, [selectedNote, state.customNpcAvatars]);
-  const selectedAuthorFollowing = useMemo(() => isFollowingAccount(selectedAuthorAccount), [selectedAuthorAccount, state.socialGraph.following]);
+
 
   useEffect(() => {
     const isBusy = busy !== "idle";
@@ -946,6 +945,8 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
     });
     return map;
   }, [characters]);
+  const selectedAuthorAccount = useMemo(() => selectedNote ? makeAccountFromNote(selectedNote) : null, [selectedNote, state.customNpcAvatars, characterAvatarMap]);
+  const selectedAuthorFollowing = useMemo(() => isFollowingAccount(selectedAuthorAccount), [selectedAuthorAccount, state.socialGraph.following]);
   const followedMentionCharacters = useMemo(() => {
     const characterById = new Map(characters.map(character => [character.id, character]));
     return state.socialGraph.following
