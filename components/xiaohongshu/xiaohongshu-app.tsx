@@ -119,6 +119,7 @@ type PendingFeedAction = "refresh" | "clear";
 const TABS: Array<{ id: XiaohongshuTabId; label: string; icon: typeof Home }> = [
   { id: "home", label: "首页", icon: Home },
   { id: "video", label: "主页", icon: MapPin },
+  { id: "publish", label: "发布+", icon: Plus },
   { id: "messages", label: "消息", icon: Bell },
   { id: "profile", label: "我的", icon: UserRound },
 ];
@@ -576,6 +577,7 @@ function NoteCard({
                 ...account,
                 avatar: avatarSrc
               });
+              setSelectedTab("video"); // 点击头像切换到底栏的“主页”tab
             }
           }}>
             <XhsAvatar className="cp-xhs-note-author-avatar" src={avatarSrc} name={note.authorName} />
@@ -703,6 +705,7 @@ function CommentList({
                   avatar: getAvatar(comment),
                   followedAt: new Date().toISOString()
                 });
+                setSelectedTab("video"); // 点击头像切换到底栏的“主页”tab
               }
             }}>
               <XhsAvatar className="cp-xhs-comment-avatar" src={getAvatar(comment)} name={comment.authorName} />
@@ -717,6 +720,7 @@ function CommentList({
                     avatar: getAvatar(comment),
                     followedAt: new Date().toISOString()
                   });
+                  setSelectedTab("video"); // 点击头像切换到底栏的“主页”tab
                 }
               }}>
                 {comment.authorName}
@@ -1182,6 +1186,14 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       notifications: [userMessage, ...state.notifications],
     });
     setState(current);
+
+    // 发送用户私信时也触发 AI 角色自动回复
+    setTimeout(() => {
+      void handleGenerateDmReply({
+        ...thread,
+        notifications: [userMessage, ...thread.notifications],
+      });
+    }, 400);
   }
 
   async function handleGenerateDmReply(thread: XiaohongshuDmThread) {
@@ -1209,6 +1221,116 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       onNotice?.("请先发送一条私信");
       return;
     }
+
+    // 检查是不是角色（character）的私信。如果是，实现与聊天 app 的记忆互通
+    const charMatch = threadId.match(/^dm:char:(.+)$/);
+    if (charMatch) {
+      const charId = charMatch[1];
+      const character = characters.find(c => c.id === charId);
+      if (character) {
+        // 记忆互通：我们将小红书的私信对话作为短期记忆事件记录到该角色的记忆库中，
+        // 从而直接与聊天 app（以该角色的 memory 为核心）互通！
+        const lastMsgText = latestUserText;
+        try {
+          const reply = await generateXiaohongshuNpcDmReply({
+            threadName,
+            userName,
+            messages: baseMessages,
+            latestUserText: lastMsgText,
+            settings: current.settings,
+          });
+          const replies = reply.messages
+            .filter(Boolean)
+            .map((message, index) => ({
+              ...makeXiaohongshuNotification({
+                type: "dm" as const,
+                actorName: threadName,
+                text: message,
+                thumbnailText: "私信",
+                direction: "incoming" as const,
+                threadId,
+                threadName,
+                unread: selectedDmThreadId !== threadId,
+              }),
+              createdAt: new Date(Date.now() + index + 1).toISOString(),
+            }));
+
+          if (replies.length > 0) {
+            current = saveXiaohongshuState({
+              ...current,
+              notifications: [...replies, ...current.notifications],
+            });
+            setState(current);
+
+            // 写入短期记忆事件，使得在聊天 app 里，角色也能记得在小红书私信中聊过的内容！
+            const { recordXiaohongshuReplyEvent } = await import("@/lib/xiaohongshu-memory");
+            const fakeNote: XiaohongshuNote = {
+              id: `xhs_dm_fake_note_${charId}`,
+              type: "post",
+              source: "character",
+              authorId: charId,
+              authorName: threadName,
+              title: "私信对话",
+              body: `小红书私信对话`,
+              coverIcon: "",
+              tone: "ivory",
+              tags: [],
+              likeCount: 0,
+              saveCount: 0,
+              commentCount: 0,
+              liked: false,
+              saved: false,
+              recentLikeNames: [],
+              recentSaveNames: [],
+              comments: [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            const fakeUserComment: XiaohongshuComment = {
+              id: `xhs_dm_fake_user_cmt_${Date.now()}`,
+              noteId: fakeNote.id,
+              authorType: "user",
+              authorId: "user",
+              authorName: userName,
+              text: lastMsgText,
+              likeCount: 0,
+              dislikeCount: 0,
+              liked: false,
+              disliked: false,
+              createdAt: new Date().toISOString(),
+            };
+            const fakeCharReply: XiaohongshuComment = {
+              id: `xhs_dm_fake_char_cmt_${Date.now()}`,
+              noteId: fakeNote.id,
+              authorType: "character",
+              authorId: charId,
+              authorName: threadName,
+              text: replies.map(r => r.text).join(" "),
+              likeCount: 0,
+              dislikeCount: 0,
+              liked: false,
+              disliked: false,
+              createdAt: new Date().toISOString(),
+            };
+
+            recordXiaohongshuReplyEvent({
+              characterId: charId,
+              characterName: character.name,
+              note: fakeNote,
+              comment: fakeCharReply,
+              targetComment: fakeUserComment,
+            });
+            touchCharacterMemory(character);
+          }
+        } catch (err) {
+          handleGenerationError(err, "暂时无法生成私信回复。");
+        } finally {
+          setBusy("idle");
+        }
+        return;
+      }
+    }
+
     try {
       const reply = await generateXiaohongshuNpcDmReply({
         threadName,
@@ -1950,11 +2072,32 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       // 1. 获取对应的角色
       const character = characters.find(c => c.id === account.id);
       if (character) {
-        // 2. 找到或创建该角色在 chat-storage 里的私聊会话并跳转
+        // 2. 找到该角色在 chat-storage 里的私聊会话并跳转（这里不是跳转到聊天app，而是进入消息的个人私信界面，并且记忆与聊天app互通）
         const chatSession = createOrGetSession(character.id);
         if (chatSession) {
-          onClose(false); // 关闭小红书
-          window.dispatchEvent(new CustomEvent("open-chat-session", { detail: { sessionId: chatSession.id } }));
+          // 我们不关闭小红书，也不跳转到原生聊天App。而是直接在小红书的私信界面里操作，并把 threadId 与 chatSession.id 绑定！
+          const threadId = `dm:char:${character.id}`;
+          const existing = state.notifications.some(n => n.threadId === threadId);
+          if (!existing) {
+            const initNotice = makeXiaohongshuNotification({
+              type: "dm",
+              actorName: account.name,
+              text: "你好呀！",
+              thumbnailText: "私信",
+              direction: "incoming",
+              threadId,
+              threadName: account.name,
+              unread: false,
+            });
+            setState(current => saveXiaohongshuState({
+              ...current,
+              notifications: [initNotice, ...current.notifications]
+            }));
+          }
+          setSelectedTab("messages");
+          setSelectedDmThreadId(threadId);
+          setViewingProfileAccount(null);
+          setSelectedNoteId(null);
           return;
         }
       }
@@ -2545,6 +2688,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                     ...account,
                     avatar: getNoteAvatar(note)
                   });
+                  setSelectedTab("video"); // 点击头像切换到底栏的“主页”tab
                 }
               }}>
                 <XhsAvatar className="cp-xhs-video-author-avatar" src={getNoteAvatar(note)} name={note.authorName} />
@@ -2965,6 +3109,7 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
                     ...account,
                     avatar: getNoteAvatar(selectedNote)
                   });
+                  setSelectedTab("video"); // 点击头像切换到底栏的“主页”tab
                 }
               }}>
                 <XhsAvatar className="cp-xhs-detail-avatar" src={getNoteAvatar(selectedNote)} name={selectedNote.authorName} />
@@ -3377,29 +3522,30 @@ export function XiaohongshuApp({ onClose, onNotice, visible = true, onIdle, onBu
       {!selectedNote && !isMessageSubpage ? <nav className="cp-xhs-tabbar xhs-tabbar" aria-label="小红书导航">
         {TABS.map((tab, idx) => {
           const active = selectedTab === tab.id;
-          const isHomeTab = tab.id === "home";
+          const isPublishTab = tab.id === "publish";
           return (
             <div key={tab.id} className="flex-1 flex items-center justify-center relative">
-              <button
-                type="button"
-                className={`cp-xhs-tab ${active ? "is-active" : ""}`}
-                onClick={() => setSelectedTab(tab.id)}
-              >
-                <div className="cp-xhs-tab-inner">
-                  <span>{tab.label}</span>
-                  {tab.id === "messages" && unreadCount > 0 ? (
-                    <span className="cp-xhs-tab-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
-                  ) : null}
-                </div>
-              </button>
-              {isHomeTab && (
+              {isPublishTab ? (
                 <button
                   type="button"
-                  className="absolute right-[-18px] top-1/2 translate-y-[-50%] w-[32px] h-[32px] rounded-lg bg-[#ff2442] flex items-center justify-center text-white shadow-md z-[5]"
+                  className="w-[32px] h-[32px] rounded-lg bg-[#ff2442] flex items-center justify-center text-white shadow-md z-[5]"
                   onClick={() => setComposeOpen(true)}
                   aria-label="发布"
                 >
                   <Plus size={18} strokeWidth={3} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={`cp-xhs-tab ${active ? "is-active" : ""}`}
+                  onClick={() => setSelectedTab(tab.id)}
+                >
+                  <div className="cp-xhs-tab-inner">
+                    <span>{tab.label}</span>
+                    {tab.id === "messages" && unreadCount > 0 ? (
+                      <span className="cp-xhs-tab-badge">{unreadCount > 99 ? "99+" : unreadCount}</span>
+                    ) : null}
+                  </div>
                 </button>
               )}
             </div>
